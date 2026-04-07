@@ -129,7 +129,9 @@ body {
 }
 
 .topbar {
-  margin-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .topbar-badge {
@@ -163,6 +165,28 @@ body {
   gap: 22px;
   margin-bottom: 22px;
 }
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+}
+
+.logout-btn-top {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.3s;
+}
+
+.logout-btn-top:hover {
+  background: #e31837;
+  border-color: #e31837;
+}
+
 
 .wallet-card,
 .profile-card,
