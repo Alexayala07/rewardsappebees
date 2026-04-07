@@ -64,8 +64,24 @@ let currentCustomerUid = null;
 let currentCustomerData = null;
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) {
+    if (!user) {
     window.location.href = "index.html";
+    return;
+  }
+
+  // 🔥 validar rol
+  const managerRef = doc(db, "users", user.uid);
+  const managerSnap = await getDoc(managerRef);
+
+  if (!managerSnap.exists()) {
+    window.location.href = "panel.html";
+    return;
+  }
+
+  const data = managerSnap.data();
+
+  if (data.role !== "manager" && data.role !== "admin") {
+    window.location.href = "panel.html";
     return;
   }
 
