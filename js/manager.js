@@ -64,46 +64,8 @@ let currentCustomerUid = null;
 let currentCustomerData = null;
 
 onAuthStateChanged(auth, async (user) => {
-<<<<<<< HEAD
-    if (!user) {
-    window.location.href = "index.html";
-    return;
-  }
-=======
   if (!user) {
-  window.location.href = "login-manager.html";
-  return;
-}
-
-if (!managerSnap.exists()) {
-  alert("No tienes acceso a este panel.");
-  window.location.href = "login-manager.html";
-  return;
-}
-
-const data = managerSnap.data();
-const role = data.role || "customer";
-
-if (!["manager", "admin"].includes(role)) {
-  alert("Acceso restringido. Este panel es solo para gerente o admin.");
-  window.location.href = "login-manager.html";
-  return;
-}
->>>>>>> bc8f1be (Agrega login separado para gerente)
-
-  // 🔥 validar rol
-  const managerRef = doc(db, "users", user.uid);
-  const managerSnap = await getDoc(managerRef);
-
-  if (!managerSnap.exists()) {
-    window.location.href = "panel.html";
-    return;
-  }
-
-  const data = managerSnap.data();
-
-  if (data.role !== "manager" && data.role !== "admin") {
-    window.location.href = "panel.html";
+    window.location.href = "login-manager.html";
     return;
   }
 
@@ -113,7 +75,7 @@ if (!["manager", "admin"].includes(role)) {
 
     if (!managerSnap.exists()) {
       alert("No tienes acceso a este panel.");
-      window.location.href = "panel.html";
+      window.location.href = "login-manager.html";
       return;
     }
 
@@ -122,7 +84,7 @@ if (!["manager", "admin"].includes(role)) {
 
     if (!["manager", "admin"].includes(role)) {
       alert("Acceso restringido. Este panel es solo para gerente o admin.");
-      window.location.href = "panel.html";
+      window.location.href = "login-manager.html";
       return;
     }
 
@@ -134,7 +96,7 @@ if (!["manager", "admin"].includes(role)) {
   } catch (error) {
     console.error("Error validando gerente:", error);
     alert("No se pudo validar el acceso.");
-    window.location.href = "panel.html";
+    window.location.href = "login-manager.html";
   }
 });
 
