@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Applebee's Rewards | Panel</title>
+  <link rel="stylesheet" href="css/panel.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="dashboard">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-box">
+          <img src="assets/Applebeewine.png" alt="Applebee's Logo" class="brand-logo">
+          <div>
+            <h2>Applebee’s</h2>
+            <p>Rewards Platform</p>
+          </div>
+        </div>
+
+        <nav class="sidebar-menu">
+          <a href="#inicio" class="menu-link active">Inicio</a>
+          <a href="#perfil" class="menu-link">Perfil</a>
+          <a href="#wallet" class="menu-link">Tarjeta</a>
+          <a href="#movimientos" class="menu-link">Movimientos</a>
+          <a href="#promos" class="menu-link">Promociones</a>
+        </nav>
+      </div>
+
+      <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
+    </aside>
+
+    <section class="content">
+      <header class="topbar" id="inicio">
+        <div>
+          <span class="topbar-badge">APPLEBEE’S DIGITAL EXPERIENCE</span>
+          <h1>Bienvenido, <span id="userName">Usuario</span></h1>
+          <p>Gestiona tu perfil, puntos, visitas y experiencia digital.</p>
+        </div>
+      </header>
+
+      <section class="hero-grid" id="wallet">
+        <article class="wallet-card">
+          <div class="wallet-glow"></div>
+
+          <div class="wallet-header">
+            <div>
+              <span class="wallet-label">MEMBERSHIP CARD</span>
+              <h2>Applebee’s Rewards</h2>
+            </div>
+            <img src="assets/Applebeewine.png" alt="Logo" class="wallet-logo">
+          </div>
+
+          <div class="wallet-body">
+            <div class="wallet-user">
+              <span class="wallet-mini-label">Cliente</span>
+              <strong id="walletFullName">Usuario Applebee’s</strong>
+            </div>
+
+            <div class="wallet-stats">
+              <div class="wallet-stat">
+                <span>Puntos</span>
+                <strong id="userPoints">0</strong>
+              </div>
+              <div class="wallet-stat">
+                <span>Visitas</span>
+                <strong id="userVisits">0</strong>
+              </div>
+              <div class="wallet-stat">
+                <span>Nivel</span>
+                <strong id="userLevel">Classic</strong>
+              </div>
+            </div>
+
+            <div class="wallet-footer">
+              <div>
+                <span class="wallet-mini-label">ID digital</span>
+                <strong id="walletId">AB-000000</strong>
+              </div>
+              <div class="wallet-chip"></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="profile-card" id="perfil">
+          <div class="section-title-row">
+            <h3>Mi perfil</h3>
+            <span class="section-dot"></span>
+          </div>
+
+          <form id="profileForm" class="profile-form">
+            <div class="form-grid">
+              <div class="input-group">
+                <label for="profileFirstName">Nombre</label>
+                <input type="text" id="profileFirstName" />
+              </div>
+
+              <div class="input-group">
+                <label for="profileLastName">Apellido</label>
+                <input type="text" id="profileLastName" />
+              </div>
+
+              <div class="input-group">
+                <label for="profileEmail">Correo</label>
+                <input type="email" id="profileEmail" disabled />
+              </div>
+
+              <div class="input-group">
+                <label for="profilePhone">Teléfono</label>
+                <input type="text" id="profilePhone" />
+              </div>
+
+              <div class="input-group">
+                <label for="profileCity">Ciudad</label>
+                <input type="text" id="profileCity" />
+              </div>
+
+              <div class="input-group">
+                <label for="profileBirthday">Cumpleaños</label>
+                <input type="date" id="profileBirthday" />
+              </div>
+            </div>
+
+            <div class="profile-actions">
+              <button type="submit" class="btn-primary">Guardar cambios</button>
+              <div id="profileMessage" class="form-message"></div>
+            </div>
+          </form>
+        </article>
+      </section>
+
+      <section class="cards-grid">
+        <div class="left-column">
+          <article class="stats-panel">
+            <div class="section-title-row">
+              <h3>Resumen</h3>
+              <span class="section-dot"></span>
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span>Total de puntos</span>
+                <strong id="summaryPoints">0</strong>
+              </div>
+              <div class="stat-card">
+                <span>Total de visitas</span>
+                <strong id="summaryVisits">0</strong>
+              </div>
+              <div class="stat-card">
+                <span>Nivel actual</span>
+                <strong id="summaryLevel">Classic</strong>
+              </div>
+              <div class="stat-card">
+                <span>Estado</span>
+                <strong>Activo</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="actions-panel">
+            <div class="section-title-row">
+              <h3>Acciones rápidas</h3>
+              <span class="section-dot"></span>
+            </div>
+
+            <div class="actions-grid">
+              <button class="action-btn add" id="addPointsBtn">+ 10 puntos</button>
+              <button class="action-btn remove" id="removePointsBtn">- 10 puntos</button>
+              <button class="action-btn visit" id="addVisitBtn">+ 1 visita</button>
+            </div>
+
+            <p class="actions-note">
+              Estas acciones son para pruebas del sistema. Después las conectaremos con tickets, compras y reglas reales.
+            </p>
+          </article>
+
+          <article class="activity-panel" id="movimientos">
+            <div class="section-title-row">
+              <h3>Historial de movimientos</h3>
+              <span class="section-dot"></span>
+            </div>
+
+            <div class="activity-list" id="activityList">
+              <div class="empty-state">
+                Aún no hay movimientos registrados.
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="right-column">
+          <article class="qr-panel">
+            <div class="section-title-row">
+              <h3>Mi código QR</h3>
+              <span class="section-dot"></span>
+            </div>
+
+            <div class="qr-box">
+              <img
+                id="qrImage"
+                src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=APPLEBEES-DEMO"
+                alt="QR del usuario"
+              />
+            </div>
+
+            <p class="qr-note">
+              Este código podrá identificar al cliente en futuras integraciones con canje, puntos y Wallet.
+            </p>
+          </article>
+
+          <article class="promo-panel" id="promos">
+            <div class="section-title-row">
+              <h3>Promociones activas</h3>
+              <span class="section-dot"></span>
+            </div>
+
+            <div class="promo-list">
+              <div class="promo-item promo-red">
+                <span class="promo-tag">EXCLUSIVO</span>
+                <h4>2x1 en bebidas seleccionadas</h4>
+                <p>Disponible de lunes a jueves para miembros activos.</p>
+              </div>
+
+              <div class="promo-item promo-dark">
+                <span class="promo-tag">CUMPLEAÑOS</span>
+                <h4>Postre o beneficio especial</h4>
+                <p>Beneficio automático durante tu mes de cumpleaños.</p>
+              </div>
+
+              <div class="promo-item promo-green">
+                <span class="promo-tag">REWARDS</span>
+                <h4>Acumula puntos por cada visita</h4>
+                <p>Entre más visites, mejores recompensas podrás obtener.</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="js/panel.js"></script>
+</body>
+</html>

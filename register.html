@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Applebee's Rewards | Crear cuenta</title>
+  <link rel="stylesheet" href="css/register.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="register-page">
+    <section class="register-container">
+      <div class="register-card">
+        <div class="top-header">
+          <img src="assets/Applebeewine.png" alt="Applebee's Logo" class="logo" />
+          <div>
+            <h1>Crear cuenta</h1>
+            <p>Únete a Applebee’s Rewards y comienza a recibir beneficios.</p>
+          </div>
+        </div>
+
+        <form id="registerForm" class="register-form">
+          <div class="grid two-cols">
+            <div class="input-group">
+              <label for="firstName">Nombre</label>
+              <input type="text" id="firstName" placeholder="Tu nombre" required />
+            </div>
+
+            <div class="input-group">
+              <label for="lastName">Apellido</label>
+              <input type="text" id="lastName" placeholder="Tu apellido" required />
+            </div>
+          </div>
+
+          <div class="grid two-cols">
+            <div class="input-group">
+              <label for="email">Correo electrónico</label>
+              <input type="email" id="email" placeholder="ejemplo@correo.com" required />
+            </div>
+
+            <div class="input-group">
+              <label for="phone">Teléfono</label>
+              <input type="tel" id="phone" placeholder="6561234567" required />
+            </div>
+          </div>
+
+          <div class="grid two-cols">
+            <div class="input-group">
+              <label for="birthday">Fecha de nacimiento</label>
+              <input type="date" id="birthday" required />
+            </div>
+
+            <div class="input-group">
+              <label for="city">Ciudad</label>
+              <input type="text" id="city" placeholder="Ciudad Juárez" />
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" placeholder="Crea una contraseña segura" required />
+          </div>
+
+          <div class="input-group">
+            <label for="confirmPassword">Confirmar contraseña</label>
+            <input type="password" id="confirmPassword" placeholder="Confirma tu contraseña" required />
+          </div>
+
+          <label class="checkbox-wrap">
+            <input type="checkbox" id="terms" required />
+            <span>Acepto los términos y condiciones y el aviso de privacidad.</span>
+          </label>
+
+          <button type="submit" class="btn-primary">Crear mi cuenta</button>
+
+          <div id="registerMessage" class="form-message"></div>
+        </form>
+
+        <div class="bottom-link">
+          <span>¿Ya tienes cuenta?</span>
+          <a href="index.html">Inicia sesión</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/register.js"></script>
+</body>
+</html>

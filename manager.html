@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Applebee's Rewards | Panel Gerente</title>
+  <link rel="stylesheet" href="css/manager.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="manager-layout">
+    <aside class="sidebar">
+      <div class="brand-box">
+        <img src="assets/Applebeewine.png" alt="Applebee's Logo" class="brand-logo">
+        <div>
+          <h2>Applebee’s</h2>
+          <p>Panel Gerente / Caja</p>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <a href="#scannerSection" class="nav-link active">Escáner</a>
+        <a href="#customerSection" class="nav-link">Cliente</a>
+        <a href="#actionsSection" class="nav-link">Acciones</a>
+      </nav>
+
+      <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
+    </aside>
+
+    <section class="main-content">
+      <header class="topbar">
+        <div>
+          <span class="badge">OPERACIÓN EN SUCURSAL</span>
+          <h1>Validación de compras y visitas</h1>
+          <p>Escanea el QR del cliente y registra compras o visitas con control real.</p>
+        </div>
+      </header>
+
+      <section class="grid-top">
+        <article class="card scanner-card" id="scannerSection">
+          <div class="card-header">
+            <h3>Escáner QR</h3>
+            <span class="dot"></span>
+          </div>
+
+          <div class="scanner-actions">
+            <button id="startScannerBtn" class="btn-primary">Iniciar escáner</button>
+            <button id="stopScannerBtn" class="btn-secondary">Detener escáner</button>
+          </div>
+
+          <div id="reader" class="qr-reader"></div>
+
+          <div class="manual-box">
+            <label for="manualQrInput">O pegar contenido QR manualmente</label>
+            <textarea id="manualQrInput" rows="4" placeholder='{"uid":"abc123","walletId":"AB-ABC123","fullName":"Cliente"}'></textarea>
+            <button id="loadManualQrBtn" class="btn-primary">Cargar QR manual</button>
+          </div>
+
+          <div id="scannerMessage" class="message-box"></div>
+        </article>
+
+        <article class="card customer-card" id="customerSection">
+          <div class="card-header">
+            <h3>Cliente detectado</h3>
+            <span class="dot"></span>
+          </div>
+
+          <div class="customer-profile">
+            <div class="profile-row">
+              <span>Nombre</span>
+              <strong id="customerName">-</strong>
+            </div>
+            <div class="profile-row">
+              <span>Correo</span>
+              <strong id="customerEmail">-</strong>
+            </div>
+            <div class="profile-row">
+              <span>ID digital</span>
+              <strong id="customerWalletId">-</strong>
+            </div>
+            <div class="profile-row">
+              <span>Puntos</span>
+              <strong id="customerPoints">0</strong>
+            </div>
+            <div class="profile-row">
+              <span>Visitas</span>
+              <strong id="customerVisits">0</strong>
+            </div>
+            <div class="profile-row">
+              <span>Nivel</span>
+              <strong id="customerLevel">Classic</strong>
+            </div>
+          </div>
+
+          <div class="customer-state" id="customerState">
+            Escanea un QR para cargar al cliente.
+          </div>
+        </article>
+      </section>
+
+      <section class="grid-bottom" id="actionsSection">
+        <article class="card actions-card">
+          <div class="card-header">
+            <h3>Registrar acción</h3>
+            <span class="dot"></span>
+          </div>
+
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="purchaseTab">Compra validada</button>
+            <button class="tab-btn" data-tab="visitTab">Visita sin compra</button>
+          </div>
+
+          <div id="purchaseTab" class="tab-panel active">
+            <form id="purchaseForm" class="form-grid">
+              <div class="input-group">
+                <label for="purchaseStoreId">Sucursal</label>
+                <select id="purchaseStoreId" required>
+                  <option value="">Selecciona una sucursal</option>
+                  <option value="applebees_torres">Applebee's Torres</option>
+                  <option value="applebees_tecnologico">Applebee's Tecnológico</option>
+                  <option value="applebees_triunfo">Applebee's Triunfo</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label for="purchaseTicketDate">Fecha del ticket</label>
+                <input type="date" id="purchaseTicketDate" required />
+              </div>
+
+              <div class="input-group">
+                <label for="purchaseTicketFolio">Folio del ticket</label>
+                <input
+                  type="text"
+                  id="purchaseTicketFolio"
+                  inputmode="numeric"
+                  maxlength="5"
+                  placeholder="20002"
+                  required
+                />
+              </div>
+
+              <div class="input-group">
+                <label for="purchaseAmount">Monto total</label>
+                <input type="number" id="purchaseAmount" step="0.01" min="0.01" placeholder="365.00" required />
+              </div>
+
+              <div class="input-group">
+                <label for="purchaseWaiterName">Nombre del mesero</label>
+                <input type="text" id="purchaseWaiterName" placeholder="JUAN PEREZ" required />
+              </div>
+
+              <div class="input-group">
+                <label for="purchaseNotes">Notas</label>
+                <input type="text" id="purchaseNotes" placeholder="Mesa 12 / consumo cena" />
+              </div>
+
+              <div class="formula-box">
+                <span>Regla actual:</span>
+                <strong>1 punto por cada $20 MXN</strong>
+              </div>
+
+              <button type="submit" class="btn-success full">Registrar compra y visita</button>
+            </form>
+          </div>
+
+          <div id="visitTab" class="tab-panel">
+            <form id="visitForm" class="form-grid">
+              <div class="input-group">
+                <label for="visitStoreId">Sucursal</label>
+                <select id="visitStoreId" required>
+                  <option value="">Selecciona una sucursal</option>
+                  <option value="applebees_torres">Applebee's Torres</option>
+                  <option value="applebees_tecnologico">Applebee's Tecnológico</option>
+                  <option value="applebees_triunfo">Applebee's Triunfo</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label for="visitNotes">Notas</label>
+                <input type="text" id="visitNotes" placeholder="Cliente visitó la sucursal sin compra" />
+              </div>
+
+              <div class="formula-box">
+                <span>Regla actual:</span>
+                <strong>Máximo 1 visita por día por sucursal</strong>
+              </div>
+
+              <button type="submit" class="btn-warning full">Registrar visita</button>
+            </form>
+          </div>
+
+          <div id="actionMessage" class="message-box"></div>
+        </article>
+
+        <article class="card history-card">
+          <div class="card-header">
+            <h3>Últimos movimientos del cliente</h3>
+            <span class="dot"></span>
+          </div>
+
+          <div id="historyList" class="history-list">
+            <div class="empty-state">Aún no hay cliente cargado.</div>
+          </div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
+  <script type="module" src="js/manager.js"></script>
+</body>
+</html>
