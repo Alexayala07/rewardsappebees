@@ -1,0 +1,176 @@
+:root {
+  --bg-main: #050c13;
+  --card-bg: rgba(9, 17, 28, 0.82);
+  --border-soft: rgba(255,255,255,0.08);
+  --text-main: #ffffff;
+  --text-soft: #b7c2cf;
+  --apple-red: #e31837;
+  --apple-red-2: #ff4b67;
+  --shadow-main: 0 22px 60px rgba(0,0,0,0.35);
+  --radius-xl: 28px;
+  --radius-lg: 18px;
+  --transition: 0.28s ease;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: 'Inter', sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(227,24,55,0.12), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(255,192,98,0.08), transparent 18%),
+    linear-gradient(180deg, #04080d, #09131d);
+  color: var(--text-main);
+}
+
+body {
+  min-height: 100vh;
+}
+
+.manager-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.manager-login-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  padding: 34px 28px;
+  box-shadow: var(--shadow-main);
+  backdrop-filter: blur(18px);
+}
+
+.logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.logo {
+  width: 110px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.badge {
+  display: inline-flex;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: #d8e44a;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+
+.header p {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.input-group {
+  display: grid;
+  gap: 8px;
+}
+
+.input-group label {
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: #edf3f9;
+}
+
+.input-group input {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: white;
+  padding: 0 16px;
+  outline: none;
+  transition: var(--transition);
+}
+
+.input-group input:focus {
+  border-color: rgba(227,24,55,0.75);
+  box-shadow: 0 0 0 4px rgba(227,24,55,0.12);
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 72px;
+}
+
+.toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #d8e44a;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn-primary {
+  min-height: 54px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--apple-red), var(--apple-red-2));
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+}
+
+.message {
+  min-height: 22px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.94rem;
+}
+
+.message.success {
+  color: #52d49b;
+}
+
+.message.error {
+  color: #ff7e8f;
+}
