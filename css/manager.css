@@ -609,3 +609,9 @@ body {
     flex-direction: column;
   }
 }
+.profile-row strong,
+.confirm-item strong,
+.stat-card strong,
+.wallet-stat strong {
+  font-variant-numeric: tabular-nums;
+}

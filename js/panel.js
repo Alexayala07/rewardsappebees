@@ -52,12 +52,12 @@ let spinCountdownInterval = null;
 let currentWheelRotation = 0;
 
 const prizes = [
-  { label: "0 puntos", value: 0, weight: 40, type: "spin" },
-  { label: "1 punto", value: 1, weight: 30, type: "spin" },
-  { label: "5 puntos", value: 5, weight: 15, type: "spin" },
+  { label: "$0.00", value: 0, weight: 40, type: "spin" },
+  { label: "$1.00", value: 1, weight: 30, type: "spin" },
+  { label: "$5.00", value: 5, weight: 15, type: "spin" },
   { label: "Otra oportunidad", value: "retry", weight: 10, type: "retry" },
-  { label: "30 puntos", value: 30, weight: 4, type: "spin" },
-  { label: "50 puntos", value: 50, weight: 1, type: "spin" }
+  { label: "$30.00", value: 30, weight: 4, type: "spin" },
+  { label: "$50.00", value: 50, weight: 1, type: "spin" }
 ];
 
 onAuthStateChanged(auth, async (user) => {
@@ -95,7 +95,7 @@ async function loadUserProfile() {
     const phone = currentUserData.phone || "";
     const city = currentUserData.city || "";
     const birthday = currentUserData.birthday || "";
-    const points = currentUserData.points ?? 0;
+    const balance = Number(currentUserData.balance ?? currentUserData.points ?? 0);
     const visits = currentUserData.visits ?? 0;
     const level = currentUserData.level || "Classic";
     const digitalId =
@@ -105,12 +105,12 @@ async function loadUserProfile() {
 
     userName.textContent = firstName || "Usuario";
     walletFullName.textContent = fullName;
-    userPoints.textContent = points;
+    userPoints.textContent = formatMoney(balance);
     userVisits.textContent = visits;
     userLevel.textContent = level;
     walletId.textContent = digitalId;
 
-    summaryPoints.textContent = points;
+    summaryPoints.textContent = formatMoney(balance);
     summaryVisits.textContent = visits;
     summaryLevel.textContent = level;
 
@@ -237,14 +237,15 @@ if (spinBtn && wheel && resultText) {
 
           resultText.textContent = "¡Otra oportunidad! Vuelve a jugar en 24:00:00.";
         } else {
-          const prizePoints = Number(prize.value) || 0;
-          const currentPoints = currentUserData.points ?? 0;
+          const prizeBalance = Number(prize.value) || 0;
+          const currentBalance = Number(currentUserData.balance ?? currentUserData.points ?? 0);
           const currentVisits = currentUserData.visits ?? 0;
-          const newPoints = currentPoints + prizePoints;
-          const newLevel = calculateLevel(newPoints, currentVisits);
+          const newBalance = Number((currentBalance + prizeBalance).toFixed(2));
+          const newLevel = calculateLevel(newBalance, currentVisits);
 
           await updateDoc(userRef, {
-            points: increment(prizePoints),
+            balance: newBalance,
+            points: newBalance, // compatibilidad temporal
             level: newLevel,
             lastSpinAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -253,8 +254,8 @@ if (spinBtn && wheel && resultText) {
           await addMovement(
             "spin",
             "Premio de ruleta",
-            `Ganaste ${prize.label} en la ruleta promocional.`,
-            prizePoints
+            `Ganaste ${prize.label} de dinero electrónico en la ruleta promocional.`,
+            prizeBalance
           );
 
           resultText.textContent = `Ganaste ${prize.label}`;
@@ -272,7 +273,7 @@ if (spinBtn && wheel && resultText) {
   });
 }
 
-async function addMovement(type, title, description, pointsChange = 0) {
+async function addMovement(type, title, description, balanceChange = 0) {
   if (!currentUser) return;
 
   try {
@@ -282,7 +283,8 @@ async function addMovement(type, title, description, pointsChange = 0) {
       type,
       title,
       description,
-      pointsChange,
+      balanceChange,
+      pointsChange: balanceChange, // compatibilidad temporal
       createdAt: serverTimestamp()
     });
   } catch (error) {
@@ -313,6 +315,7 @@ async function loadMovements() {
       const data = docItem.data();
       const iconClass = getMovementIcon(data.type);
       const dateText = formatDate(data.createdAt);
+      const amountChange = data.balanceChange ?? data.pointsChange ?? 0;
 
       const item = document.createElement("div");
       item.className = "activity-item";
@@ -321,7 +324,7 @@ async function loadMovements() {
         <div>
           <strong>${escapeHtml(data.title || "Movimiento")}</strong>
           <p>${escapeHtml(data.description || "")}</p>
-          <p>${dateText}${formatPointsChange(data.pointsChange)}</p>
+          <p>${dateText}${formatBalanceChange(amountChange)}</p>
         </div>
       `;
 
@@ -435,9 +438,9 @@ function generateWalletId(uid) {
   return `AB-${uid.substring(0, 6).toUpperCase()}`;
 }
 
-function calculateLevel(points, visits) {
-  if (points >= 200 || visits >= 15) return "Gold";
-  if (points >= 100 || visits >= 8) return "Silver";
+function calculateLevel(balance, visits) {
+  if (balance >= 200 || visits >= 15) return "Gold";
+  if (balance >= 100 || visits >= 8) return "Silver";
   return "Classic";
 }
 
@@ -468,11 +471,19 @@ function formatDate(timestamp) {
   })}`;
 }
 
-function formatPointsChange(pointsChange) {
-  if (!pointsChange) return "";
+function formatBalanceChange(value) {
+  if (!value) return "";
 
-  const sign = pointsChange > 0 ? "+" : "";
-  return ` • Cambio: ${sign}${pointsChange} pts`;
+  const numeric = Number(value || 0);
+  const sign = numeric > 0 ? "+" : "";
+  return ` • Cambio: ${sign}${formatMoney(numeric)}`;
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN"
+  }).format(Number(value || 0));
 }
 
 function showProfileMessage(message, type) {

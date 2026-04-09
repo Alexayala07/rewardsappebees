@@ -27,7 +27,7 @@ import {
 
 const storage = getStorage(app);
 
-const POINTS_DIVISOR = 20;
+const CASHBACK_PERCENT = 0.05; // 5%
 const MIN_TICKET_AMOUNT = 50;
 const MAX_TICKET_AMOUNT = 5000;
 
@@ -240,7 +240,7 @@ purchaseForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  const pointsEarned = calculatePoints(amount);
+  const cashbackEarned = calculateCashback(amount);
   const customerFullName =
     currentCustomerData.fullName ||
     `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim();
@@ -255,7 +255,7 @@ purchaseForm.addEventListener("submit", async (e) => {
     amount,
     waiterName,
     notes,
-    pointsEarned,
+    cashbackEarned,
     ticketImageFile: selectedTicketImageFile,
     ticketImagePreview: selectedTicketImagePreview
   };
@@ -287,7 +287,7 @@ confirmPurchaseBtn.addEventListener("click", async () => {
     closeConfirmModal();
     setMessage(
       actionMessage,
-      `Compra registrada. +${result.pointsEarned} puntos y +1 visita.`,
+      `Compra registrada. +${formatMoney(result.cashbackEarned)} de dinero electrónico y +1 visita.`,
       "success"
     );
 
@@ -432,6 +432,8 @@ async function loadCustomer(uid) {
   currentCustomerUid = uid;
   currentCustomerData = data;
 
+  const currentBalance = Number(data.balance ?? data.points ?? 0);
+
   customerName.textContent =
     data.fullName ||
     `${data.firstName || ""} ${data.lastName || ""}`.trim() ||
@@ -439,7 +441,7 @@ async function loadCustomer(uid) {
 
   customerEmail.textContent = data.email || "-";
   customerWalletId.textContent = data.walletId || generateWalletId(uid);
-  customerPoints.textContent = data.points ?? 0;
+  customerPoints.textContent = formatMoney(currentBalance);
   customerVisits.textContent = data.visits ?? 0;
   customerLevel.textContent = data.level || "Classic";
   customerState.textContent = "Cliente listo para operación.";
@@ -472,14 +474,14 @@ async function loadCustomerHistory(uid) {
     if (data.ticketDate) extra.push(`Fecha ticket: ${data.ticketDate}`);
     if (data.ticketFolio) extra.push(`Folio: ${data.ticketFolio}`);
     if (data.waiterName) extra.push(`Mesero: ${data.waiterName}`);
-    if (typeof data.amount === "number") extra.push(`Monto: $${data.amount.toFixed(2)}`);
+    if (typeof data.amount === "number") extra.push(`Monto: ${formatMoney(data.amount)}`);
     if (data.ticketImageUrl) extra.push(`Evidencia guardada`);
 
     div.innerHTML = `
       <strong>${escapeHtml(data.title || "Movimiento")}</strong>
       <p>${escapeHtml(data.description || "")}</p>
       <p>${escapeHtml(extra.join(" • "))}</p>
-      <p>${formatDate(data.createdAt)}${formatPoints(data.pointsChange)}</p>
+      <p>${formatDate(data.createdAt)}${formatBalanceChange(data.balanceChange ?? data.pointsChange)}</p>
       ${data.ticketImageUrl ? `<p><a class="report-link" href="${data.ticketImageUrl}" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>` : ""}
     `;
     historyList.appendChild(div);
@@ -541,7 +543,7 @@ async function registerPurchase({
   amount,
   waiterName,
   notes,
-  pointsEarned,
+  cashbackEarned,
   ticketImageUrl
 }) {
   const ticketKey = buildTicketKey(storeId, ticketDate, folio);
@@ -563,14 +565,15 @@ async function registerPurchase({
     }
 
     const userData = userSnap.data();
-    const currentPoints = userData.points ?? 0;
+    const currentBalance = Number(userData.balance ?? userData.points ?? 0);
     const currentVisits = userData.visits ?? 0;
-    const newPoints = currentPoints + pointsEarned;
+    const newBalance = Number((currentBalance + cashbackEarned).toFixed(2));
     const newVisits = currentVisits + 1;
-    const newLevel = calculateLevel(newPoints, newVisits);
+    const newLevel = calculateLevel(newBalance, newVisits);
 
     transaction.update(userRef, {
-      points: newPoints,
+      balance: newBalance,
+      points: newBalance, // compatibilidad temporal
       visits: newVisits,
       level: newLevel,
       updatedAt: serverTimestamp()
@@ -585,7 +588,8 @@ async function registerPurchase({
       ticketDate,
       waiterName,
       amount,
-      pointsEarned,
+      cashbackEarned,
+      balanceEarned: cashbackEarned,
       ticketImageUrl: ticketImageUrl || "",
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
@@ -598,7 +602,8 @@ async function registerPurchase({
       type: "purchase",
       title: "Compra registrada",
       description: `Compra validada en ${storeName} con folio ${folio}.`,
-      pointsChange: pointsEarned,
+      balanceChange: cashbackEarned,
+      pointsChange: cashbackEarned, // compatibilidad temporal
       visitAdded: true,
       amount,
       ticketFolio: folio,
@@ -629,12 +634,14 @@ async function registerPurchase({
       amount,
       waiterName,
       ticketImageUrl: ticketImageUrl || "",
-      pointsEarned,
+      cashbackEarned,
+      balanceEarned: cashbackEarned,
+      pointsEarned: cashbackEarned, // compatibilidad temporal
       notes: notes || ""
     });
   });
 
-  return { pointsEarned };
+  return { cashbackEarned };
 }
 
 async function registerVisit({ uid, customerName, storeId, notes }) {
@@ -659,10 +666,10 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
     }
 
     const userData = userSnap.data();
-    const currentPoints = userData.points ?? 0;
+    const currentBalance = Number(userData.balance ?? userData.points ?? 0);
     const currentVisits = userData.visits ?? 0;
     const newVisits = currentVisits + 1;
-    const newLevel = calculateLevel(currentPoints, newVisits);
+    const newLevel = calculateLevel(currentBalance, newVisits);
 
     transaction.update(userRef, {
       visits: newVisits,
@@ -687,7 +694,8 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
       type: "visit",
       title: "Visita registrada",
       description: `Visita validada en ${storeName} sin compra.`,
-      pointsChange: 0,
+      balanceChange: 0,
+      pointsChange: 0, // compatibilidad temporal
       visitAdded: true,
       storeId,
       storeName,
@@ -714,7 +722,9 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
       amount: 0,
       waiterName: "",
       ticketImageUrl: "",
-      pointsEarned: 0,
+      cashbackEarned: 0,
+      balanceEarned: 0,
+      pointsEarned: 0, // compatibilidad temporal
       notes: notes || ""
     });
   });
@@ -764,11 +774,12 @@ function renderReports(rows) {
     return;
   }
 
-  let totalPoints = 0;
+  let totalCashback = 0;
   let totalAmount = 0;
 
   rows.forEach((row) => {
-    totalPoints += Number(row.pointsEarned || 0);
+    const earned = Number(row.cashbackEarned ?? row.balanceEarned ?? row.pointsEarned ?? 0);
+    totalCashback += earned;
     totalAmount += Number(row.amount || 0);
 
     const tr = document.createElement("tr");
@@ -782,7 +793,7 @@ function renderReports(rows) {
       <td>${escapeHtml(row.ticketDate || "-")}</td>
       <td>${formatMoney(row.amount || 0)}</td>
       <td>${escapeHtml(row.waiterName || "-")}</td>
-      <td>${Number(row.pointsEarned || 0)}</td>
+      <td>${formatMoney(earned)}</td>
       <td>
         ${row.ticketImageUrl ? `<a class="report-link" href="${row.ticketImageUrl}" target="_blank" rel="noopener noreferrer">Ver ticket</a>` : "-"}
       </td>
@@ -791,7 +802,7 @@ function renderReports(rows) {
   });
 
   reportsSummary.textContent =
-    `Registros: ${rows.length} • Puntos otorgados: ${totalPoints} • Monto acumulado: ${formatMoney(totalAmount)}`;
+    `Registros: ${rows.length} • Dinero electrónico otorgado: ${formatMoney(totalCashback)} • Monto acumulado: ${formatMoney(totalAmount)}`;
 }
 
 function exportReportsToCsv() {
@@ -810,23 +821,27 @@ function exportReportsToCsv() {
     "Fecha ticket",
     "Monto",
     "Mesero",
-    "Puntos",
+    "Dinero electronico",
     "Evidencia"
   ];
 
-  const lines = lastReportRows.map((row) => [
-    formatDate(row.createdAt),
-    row.managerName || "",
-    row.customerName || "",
-    getTypeLabel(row.type),
-    row.storeName || "",
-    row.ticketFolio || "",
-    row.ticketDate || "",
-    row.amount || 0,
-    row.waiterName || "",
-    row.pointsEarned || 0,
-    row.ticketImageUrl || ""
-  ]);
+  const lines = lastReportRows.map((row) => {
+    const earned = row.cashbackEarned ?? row.balanceEarned ?? row.pointsEarned ?? 0;
+
+    return [
+      formatDate(row.createdAt),
+      row.managerName || "",
+      row.customerName || "",
+      getTypeLabel(row.type),
+      row.storeName || "",
+      row.ticketFolio || "",
+      row.ticketDate || "",
+      row.amount || 0,
+      row.waiterName || "",
+      earned,
+      row.ticketImageUrl || ""
+    ];
+  });
 
   const csvContent = [
     headers.join(","),
@@ -852,7 +867,7 @@ function renderConfirmSummary(data) {
     <div class="confirm-item"><span>Folio</span><strong>${escapeHtml(data.folio)}</strong></div>
     <div class="confirm-item"><span>Monto</span><strong>${formatMoney(data.amount)}</strong></div>
     <div class="confirm-item"><span>Mesero</span><strong>${escapeHtml(data.waiterName)}</strong></div>
-    <div class="confirm-item"><span>Puntos a otorgar</span><strong>${data.pointsEarned}</strong></div>
+    <div class="confirm-item"><span>Dinero electrónico a otorgar</span><strong>${formatMoney(data.cashbackEarned)}</strong></div>
     <div class="confirm-item"><span>Gerente</span><strong>${escapeHtml(managerUser?.fullName || "-")}</strong></div>
   `;
 
@@ -878,13 +893,13 @@ function getFileExtension(fileName) {
   return parts.length > 1 ? parts.pop().toLowerCase() : "jpg";
 }
 
-function calculatePoints(amount) {
-  return Math.floor(amount / POINTS_DIVISOR);
+function calculateCashback(amount) {
+  return Number((Number(amount) * CASHBACK_PERCENT).toFixed(2));
 }
 
-function calculateLevel(points, visits) {
-  if (points >= 200 || visits >= 15) return "Gold";
-  if (points >= 100 || visits >= 8) return "Silver";
+function calculateLevel(balance, visits) {
+  if (balance >= 200 || visits >= 15) return "Gold";
+  if (balance >= 100 || visits >= 8) return "Silver";
   return "Classic";
 }
 
@@ -981,10 +996,11 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
-function formatPoints(value) {
+function formatBalanceChange(value) {
   if (!value) return "";
-  const sign = value > 0 ? "+" : "";
-  return ` • ${sign}${value} pts`;
+  const numeric = Number(value || 0);
+  const sign = numeric > 0 ? "+" : "";
+  return ` • ${sign}${formatMoney(numeric)}`;
 }
 
 function setMessage(element, text, type) {

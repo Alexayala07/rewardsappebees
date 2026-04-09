@@ -689,12 +689,12 @@ body {
   border: 7px solid #ffffff;
   margin: 0 auto;
   background: conic-gradient(
-    #f5b041 0deg 60deg,      /* 0 puntos */
-    #3498db 60deg 120deg,    /* 1 punto */
-    #9b59b6 120deg 180deg,   /* 5 puntos */
+    #f5b041 0deg 60deg,      /* $0 */
+    #3498db 60deg 120deg,    /* $1 */
+    #9b59b6 120deg 180deg,   /* $5 */
     #f40f35 180deg 240deg,   /* Otra oportunidad */
-    #3bc96f 240deg 300deg,   /* 30 puntos */
-    #4d4d4d 300deg 360deg    /* 50 puntos */
+    #3bc96f 240deg 300deg,   /* $30 */
+    #4d4d4d 300deg 360deg    /* $50 */
   );
   transition: transform 4.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   box-shadow: 0 10px 30px rgba(0,0,0,0.25);
