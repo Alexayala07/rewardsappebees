@@ -47,6 +47,10 @@ const addVisitBtn = document.getElementById("addVisitBtn");
 
 const activityList = document.getElementById("activityList");
 
+const spinBtn = document.getElementById("spinBtn");
+const wheel = document.getElementById("wheel");
+const resultText = document.getElementById("wheelResult");
+
 let currentUser = null;
 let currentUserData = null;
 
@@ -370,3 +374,47 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
+
+const prizes = [
+  { label: "0 puntos", value: 0, weight: 40 },
+  { label: "1 punto", value: 1, weight: 30 },
+  { label: "5 puntos", value: 5, weight: 15 },
+  { label: "Otra oportunidad", value: "retry", weight: 10 },
+  { label: "30 puntos", value: 30, weight: 4 },
+  { label: "50 puntos", value: 50, weight: 1 }
+];
+
+function getWeightedPrize() {
+  const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+  let random = Math.random() * totalWeight;
+
+  for (let prize of prizes) {
+    if (random < prize.weight) {
+      return prize;
+    }
+    random -= prize.weight;
+  }
+}
+
+spinBtn.addEventListener("click", () => {
+  spinBtn.disabled = true;
+
+  const prize = getWeightedPrize();
+
+  const rotation = 3600 + Math.floor(Math.random() * 360);
+  wheel.style.transform = `rotate(${rotation}deg)`;
+
+  setTimeout(() => {
+    if (prize.value === "retry") {
+      resultText.textContent = "¡Otra oportunidad!";
+    } else {
+      resultText.textContent = `Ganaste ${prize.label}`;
+    }
+
+    // 🔥 aquí puedes conectar Firebase después
+    // addPoints(prize.value)
+
+    spinBtn.disabled = false;
+  }, 4000);
+});
