@@ -40,11 +40,6 @@ const summaryLevel = document.getElementById("summaryLevel");
 
 const qrImage = document.getElementById("qrImage");
 const logoutBtn = document.getElementById("logoutBtn");
-
-const addPointsBtn = document.getElementById("addPointsBtn");
-const removePointsBtn = document.getElementById("removePointsBtn");
-const addVisitBtn = document.getElementById("addVisitBtn");
-
 const activityList = document.getElementById("activityList");
 
 const spinBtn = document.getElementById("spinBtn");
@@ -53,6 +48,15 @@ const resultText = document.getElementById("wheelResult");
 
 let currentUser = null;
 let currentUserData = null;
+
+const prizes = [
+  { label: "0 puntos", value: 0, weight: 40, type: "spin" },
+  { label: "1 punto", value: 1, weight: 30, type: "spin" },
+  { label: "5 puntos", value: 5, weight: 15, type: "spin" },
+  { label: "Otra oportunidad", value: "retry", weight: 10, type: "retry" },
+  { label: "30 puntos", value: 30, weight: 4, type: "spin" },
+  { label: "50 puntos", value: 50, weight: 1, type: "spin" }
+];
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -63,6 +67,7 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   await loadUserProfile();
   await loadMovements();
+  updateSpinAvailabilityUI();
 });
 
 async function loadUserProfile() {
@@ -168,72 +173,86 @@ profileForm.addEventListener("submit", async (e) => {
   }
 });
 
-addPointsBtn.addEventListener("click", async () => {
-  await updatePoints(10, "add", "Puntos agregados", "Se agregaron 10 puntos al saldo.");
-});
-
-removePointsBtn.addEventListener("click", async () => {
-  const currentPoints = currentUserData?.points ?? 0;
-
-  if (currentPoints < 10) {
-    alert("No hay puntos suficientes para descontar 10.");
-    return;
-  }
-
-  await updatePoints(-10, "remove", "Puntos descontados", "Se descontaron 10 puntos del saldo.");
-});
-
-addVisitBtn.addEventListener("click", async () => {
-  if (!currentUser) return;
-
+logoutBtn.addEventListener("click", async () => {
   try {
-    const userRef = doc(db, "users", currentUser.uid);
-    const newVisits = (currentUserData?.visits ?? 0) + 1;
-    const newLevel = calculateLevel(currentUserData?.points ?? 0, newVisits);
-
-    await updateDoc(userRef, {
-      visits: increment(1),
-      level: newLevel,
-      updatedAt: serverTimestamp()
-    });
-
-    await addMovement("visit", "Nueva visita registrada", "Se registró una visita adicional en tu cuenta.");
-
-    await loadUserProfile();
-    await loadMovements();
-
+    await signOut(auth);
+    window.location.href = "index.html";
   } catch (error) {
-    console.error("Error agregando visita:", error);
-    alert("No se pudo registrar la visita.");
+    console.error("Error al cerrar sesión:", error);
+    alert("No se pudo cerrar sesión.");
   }
 });
 
-async function updatePoints(amount, type, title, description) {
-  if (!currentUser) return;
+if (spinBtn && wheel && resultText) {
+  spinBtn.addEventListener("click", async () => {
+    if (!currentUser || !currentUserData) return;
 
-  try {
-    const currentPoints = currentUserData?.points ?? 0;
-    const currentVisits = currentUserData?.visits ?? 0;
-    const newPoints = currentPoints + amount;
-    const newLevel = calculateLevel(newPoints, currentVisits);
+    const canSpin = canUserSpin();
+    if (!canSpin.allowed) {
+      resultText.textContent = `Podrás volver a girar en ${canSpin.remainingText}.`;
+      return;
+    }
 
-    const userRef = doc(db, "users", currentUser.uid);
+    spinBtn.disabled = true;
+    resultText.textContent = "Girando...";
 
-    await updateDoc(userRef, {
-      points: increment(amount),
-      level: newLevel,
-      updatedAt: serverTimestamp()
-    });
+    const prize = getWeightedPrize();
+    const rotation = 3600 + Math.floor(Math.random() * 360);
+    wheel.style.transform = `rotate(${rotation}deg)`;
 
-    await addMovement(type, title, description, amount);
+    setTimeout(async () => {
+      try {
+        const userRef = doc(db, "users", currentUser.uid);
 
-    await loadUserProfile();
-    await loadMovements();
+        if (prize.value === "retry") {
+          await updateDoc(userRef, {
+            lastSpinAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
 
-  } catch (error) {
-    console.error("Error actualizando puntos:", error);
-    alert("No se pudieron actualizar los puntos.");
-  }
+          await addMovement(
+            "spin",
+            "Ruleta jugada",
+            "Obtuviste otra oportunidad en la ruleta.",
+            0
+          );
+
+          resultText.textContent = "¡Otra oportunidad! Vuelve a intentar en 24 horas.";
+        } else {
+          const prizePoints = Number(prize.value) || 0;
+          const currentPoints = currentUserData.points ?? 0;
+          const currentVisits = currentUserData.visits ?? 0;
+          const newPoints = currentPoints + prizePoints;
+          const newLevel = calculateLevel(newPoints, currentVisits);
+
+          await updateDoc(userRef, {
+            points: increment(prizePoints),
+            level: newLevel,
+            lastSpinAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+
+          await addMovement(
+            "spin",
+            "Premio de ruleta",
+            `Ganaste ${prize.label} en la ruleta promocional.`,
+            prizePoints
+          );
+
+          resultText.textContent = `Ganaste ${prize.label}`;
+        }
+
+        await loadUserProfile();
+        await loadMovements();
+        updateSpinAvailabilityUI();
+
+      } catch (error) {
+        console.error("Error procesando ruleta:", error);
+        resultText.textContent = "No se pudo registrar tu premio.";
+        spinBtn.disabled = false;
+      }
+    }, 4000);
+  });
 }
 
 async function addMovement(type, title, description, pointsChange = 0) {
@@ -303,15 +322,60 @@ async function loadMovements() {
   }
 }
 
-logoutBtn.addEventListener("click", async () => {
-  try {
-    await signOut(auth);
-    window.location.href = "index.html";
-  } catch (error) {
-    console.error("Error al cerrar sesión:", error);
-    alert("No se pudo cerrar sesión.");
+function getWeightedPrize() {
+  const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+  let random = Math.random() * totalWeight;
+
+  for (const prize of prizes) {
+    if (random < prize.weight) {
+      return prize;
+    }
+    random -= prize.weight;
   }
-});
+
+  return prizes[0];
+}
+
+function canUserSpin() {
+  const lastSpin = currentUserData?.lastSpinAt;
+
+  if (!lastSpin || !lastSpin.toDate) {
+    return { allowed: true, remainingText: "" };
+  }
+
+  const lastSpinDate = lastSpin.toDate();
+  const now = new Date();
+  const diffMs = now.getTime() - lastSpinDate.getTime();
+  const hours24 = 24 * 60 * 60 * 1000;
+
+  if (diffMs >= hours24) {
+    return { allowed: true, remainingText: "" };
+  }
+
+  const remainingMs = hours24 - diffMs;
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return {
+    allowed: false,
+    remainingText: `${hours}h ${minutes}m`
+  };
+}
+
+function updateSpinAvailabilityUI() {
+  if (!spinBtn || !resultText) return;
+
+  const spinState = canUserSpin();
+
+  if (spinState.allowed) {
+    spinBtn.disabled = false;
+    resultText.textContent = "Puedes girar una vez cada 24 horas.";
+  } else {
+    spinBtn.disabled = true;
+    resultText.textContent = `Disponible nuevamente en ${spinState.remainingText}.`;
+  }
+}
 
 function generateWalletId(uid) {
   return `AB-${uid.substring(0, 6).toUpperCase()}`;
@@ -331,6 +395,8 @@ function getMovementIcon(type) {
       return "remove";
     case "visit":
       return "visit";
+    case "spin":
+      return "add";
     case "profile":
     default:
       return "profile";
@@ -374,47 +440,3 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
-
-
-const prizes = [
-  { label: "0 puntos", value: 0, weight: 40 },
-  { label: "1 punto", value: 1, weight: 30 },
-  { label: "5 puntos", value: 5, weight: 15 },
-  { label: "Otra oportunidad", value: "retry", weight: 10 },
-  { label: "30 puntos", value: 30, weight: 4 },
-  { label: "50 puntos", value: 50, weight: 1 }
-];
-
-function getWeightedPrize() {
-  const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
-  let random = Math.random() * totalWeight;
-
-  for (let prize of prizes) {
-    if (random < prize.weight) {
-      return prize;
-    }
-    random -= prize.weight;
-  }
-}
-
-spinBtn.addEventListener("click", () => {
-  spinBtn.disabled = true;
-
-  const prize = getWeightedPrize();
-
-  const rotation = 3600 + Math.floor(Math.random() * 360);
-  wheel.style.transform = `rotate(${rotation}deg)`;
-
-  setTimeout(() => {
-    if (prize.value === "retry") {
-      resultText.textContent = "¡Otra oportunidad!";
-    } else {
-      resultText.textContent = `Ganaste ${prize.label}`;
-    }
-
-    // 🔥 aquí puedes conectar Firebase después
-    // addPoints(prize.value)
-
-    spinBtn.disabled = false;
-  }, 4000);
-});
