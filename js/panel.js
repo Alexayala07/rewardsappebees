@@ -48,6 +48,8 @@ const resultText = document.getElementById("wheelResult");
 
 let currentUser = null;
 let currentUserData = null;
+let spinCountdownInterval = null;
+let currentWheelRotation = 0;
 
 const prizes = [
   { label: "0 puntos", value: 0, weight: 40, type: "spin" },
@@ -84,7 +86,11 @@ async function loadUserProfile() {
 
     const firstName = currentUserData.firstName || "";
     const lastName = currentUserData.lastName || "";
-    const fullName = currentUserData.fullName || `${firstName} ${lastName}`.trim() || "Usuario Applebee’s";
+    const fullName =
+      currentUserData.fullName ||
+      `${firstName} ${lastName}`.trim() ||
+      "Usuario Applebee’s";
+
     const email = currentUserData.email || currentUser.email || "-";
     const phone = currentUserData.phone || "";
     const city = currentUserData.city || "";
@@ -92,9 +98,10 @@ async function loadUserProfile() {
     const points = currentUserData.points ?? 0;
     const visits = currentUserData.visits ?? 0;
     const level = currentUserData.level || "Classic";
-    const digitalId = currentUserData.walletId && currentUserData.walletId.trim() !== ""
-      ? currentUserData.walletId
-      : generateWalletId(currentUser.uid);
+    const digitalId =
+      currentUserData.walletId && currentUserData.walletId.trim() !== ""
+        ? currentUserData.walletId
+        : generateWalletId(currentUser.uid);
 
     userName.textContent = firstName || "Usuario";
     walletFullName.textContent = fullName;
@@ -123,13 +130,12 @@ async function loadUserProfile() {
     });
 
     qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrData)}`;
-
   } catch (error) {
     console.error("Error cargando perfil:", error);
   }
 }
 
-profileForm.addEventListener("submit", async (e) => {
+profileForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   if (!currentUser) return;
@@ -161,19 +167,22 @@ profileForm.addEventListener("submit", async (e) => {
       updatedAt: serverTimestamp()
     });
 
-    await addMovement("profile", "Perfil actualizado", "Tus datos personales fueron actualizados.");
+    await addMovement(
+      "profile",
+      "Perfil actualizado",
+      "Tus datos personales fueron actualizados."
+    );
 
     showProfileMessage("Perfil actualizado correctamente.", "success");
     await loadUserProfile();
     await loadMovements();
-
   } catch (error) {
     console.error("Error actualizando perfil:", error);
     showProfileMessage("No se pudo actualizar el perfil.", "error");
   }
 });
 
-logoutBtn.addEventListener("click", async () => {
+logoutBtn?.addEventListener("click", async () => {
   try {
     await signOut(auth);
     window.location.href = "index.html";
@@ -189,16 +198,25 @@ if (spinBtn && wheel && resultText) {
 
     const canSpin = canUserSpin();
     if (!canSpin.allowed) {
-      resultText.textContent = `Podrás volver a girar en ${canSpin.remainingText}.`;
+      resultText.textContent = `Vuelve a jugar en ${canSpin.remainingClock}.`;
       return;
     }
 
     spinBtn.disabled = true;
     resultText.textContent = "Girando...";
 
-    const prize = getWeightedPrize();
-    const rotation = 3600 + Math.floor(Math.random() * 360);
-    wheel.style.transform = `rotate(${rotation}deg)`;
+    const prizeIndex = getWeightedPrizeIndex();
+    const prize = prizes[prizeIndex];
+
+    const segmentAngle = 360 / prizes.length;
+    const pointerAngle = 0;
+    const segmentCenter = (prizeIndex * segmentAngle) + (segmentAngle / 2);
+
+    const fullSpins = 360 * 6;
+    const finalAngle = fullSpins + (360 - segmentCenter + pointerAngle);
+
+    currentWheelRotation += finalAngle;
+    wheel.style.transform = `rotate(${currentWheelRotation}deg)`;
 
     setTimeout(async () => {
       try {
@@ -217,7 +235,7 @@ if (spinBtn && wheel && resultText) {
             0
           );
 
-          resultText.textContent = "¡Otra oportunidad! Vuelve a intentar en 24 horas.";
+          resultText.textContent = "¡Otra oportunidad! Vuelve a jugar en 24:00:00.";
         } else {
           const prizePoints = Number(prize.value) || 0;
           const currentPoints = currentUserData.points ?? 0;
@@ -245,13 +263,12 @@ if (spinBtn && wheel && resultText) {
         await loadUserProfile();
         await loadMovements();
         updateSpinAvailabilityUI();
-
       } catch (error) {
         console.error("Error procesando ruleta:", error);
         resultText.textContent = "No se pudo registrar tu premio.";
         spinBtn.disabled = false;
       }
-    }, 4000);
+    }, 4500);
   });
 }
 
@@ -268,7 +285,6 @@ async function addMovement(type, title, description, pointsChange = 0) {
       pointsChange,
       createdAt: serverTimestamp()
     });
-
   } catch (error) {
     console.error("Error guardando movimiento:", error);
   }
@@ -311,7 +327,6 @@ async function loadMovements() {
 
       activityList.appendChild(item);
     });
-
   } catch (error) {
     console.error("Error cargando movimientos:", error);
     activityList.innerHTML = `
@@ -322,25 +337,29 @@ async function loadMovements() {
   }
 }
 
-function getWeightedPrize() {
+function getWeightedPrizeIndex() {
   const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
   let random = Math.random() * totalWeight;
 
-  for (const prize of prizes) {
-    if (random < prize.weight) {
-      return prize;
+  for (let i = 0; i < prizes.length; i++) {
+    if (random < prizes[i].weight) {
+      return i;
     }
-    random -= prize.weight;
+    random -= prizes[i].weight;
   }
 
-  return prizes[0];
+  return 0;
 }
 
 function canUserSpin() {
   const lastSpin = currentUserData?.lastSpinAt;
 
   if (!lastSpin || !lastSpin.toDate) {
-    return { allowed: true, remainingText: "" };
+    return {
+      allowed: true,
+      remainingMs: 0,
+      remainingClock: "00:00:00"
+    };
   }
 
   const lastSpinDate = lastSpin.toDate();
@@ -349,32 +368,67 @@ function canUserSpin() {
   const hours24 = 24 * 60 * 60 * 1000;
 
   if (diffMs >= hours24) {
-    return { allowed: true, remainingText: "" };
+    return {
+      allowed: true,
+      remainingMs: 0,
+      remainingClock: "00:00:00"
+    };
   }
 
   const remainingMs = hours24 - diffMs;
-  const totalMinutes = Math.ceil(remainingMs / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
 
   return {
     allowed: false,
-    remainingText: `${hours}h ${minutes}m`
+    remainingMs,
+    remainingClock: formatCountdown(remainingMs)
   };
 }
 
 function updateSpinAvailabilityUI() {
   if (!spinBtn || !resultText) return;
 
-  const spinState = canUserSpin();
-
-  if (spinState.allowed) {
-    spinBtn.disabled = false;
-    resultText.textContent = "Puedes girar una vez cada 24 horas.";
-  } else {
-    spinBtn.disabled = true;
-    resultText.textContent = `Disponible nuevamente en ${spinState.remainingText}.`;
+  if (spinCountdownInterval) {
+    clearInterval(spinCountdownInterval);
+    spinCountdownInterval = null;
   }
+
+  const updateView = () => {
+    const spinState = canUserSpin();
+
+    if (spinState.allowed) {
+      spinBtn.disabled = false;
+      resultText.textContent = "Puedes girar ahora.";
+      return;
+    }
+
+    spinBtn.disabled = true;
+    resultText.textContent = `Vuelve a jugar en ${spinState.remainingClock}.`;
+  };
+
+  updateView();
+
+  spinCountdownInterval = setInterval(() => {
+    const spinState = canUserSpin();
+
+    if (spinState.allowed) {
+      clearInterval(spinCountdownInterval);
+      spinCountdownInterval = null;
+      spinBtn.disabled = false;
+      resultText.textContent = "Puedes girar ahora.";
+      return;
+    }
+
+    resultText.textContent = `Vuelve a jugar en ${spinState.remainingClock}.`;
+  }, 1000);
+}
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function generateWalletId(uid) {
