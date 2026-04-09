@@ -1,4 +1,4 @@
-import { auth, db } from "../firebase/firebase-config.js";
+import { app, auth, db } from "../firebase/firebase-config.js";
 import {
   onAuthStateChanged,
   signOut
@@ -17,6 +17,15 @@ import {
   where,
   Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const storage = getStorage(app);
 
 const POINTS_DIVISOR = 20;
 const MIN_TICKET_AMOUNT = 50;
@@ -57,6 +66,10 @@ const purchaseTicketFolio = document.getElementById("purchaseTicketFolio");
 const purchaseAmount = document.getElementById("purchaseAmount");
 const purchaseWaiterName = document.getElementById("purchaseWaiterName");
 const purchaseNotes = document.getElementById("purchaseNotes");
+const purchaseTicketImage = document.getElementById("purchaseTicketImage");
+const clearTicketImageBtn = document.getElementById("clearTicketImageBtn");
+const ticketPreview = document.getElementById("ticketPreview");
+const ticketImageName = document.getElementById("ticketImageName");
 
 const visitStoreId = document.getElementById("visitStoreId");
 const visitNotes = document.getElementById("visitNotes");
@@ -68,6 +81,7 @@ const confirmModal = document.getElementById("confirmModal");
 const confirmSummary = document.getElementById("confirmSummary");
 const cancelConfirmBtn = document.getElementById("cancelConfirmBtn");
 const confirmPurchaseBtn = document.getElementById("confirmPurchaseBtn");
+const confirmTicketPreview = document.getElementById("confirmTicketPreview");
 
 const reportRange = document.getElementById("reportRange");
 const reportType = document.getElementById("reportType");
@@ -83,6 +97,8 @@ let currentCustomerUid = null;
 let currentCustomerData = null;
 let pendingPurchaseData = null;
 let lastReportRows = [];
+let selectedTicketImageFile = null;
+let selectedTicketImagePreview = "";
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -172,6 +188,9 @@ purchaseWaiterName.addEventListener("input", () => {
   purchaseWaiterName.value = normalizePersonName(purchaseWaiterName.value);
 });
 
+purchaseTicketImage.addEventListener("change", handleTicketImageChange);
+clearTicketImageBtn.addEventListener("click", clearTicketImageSelection);
+
 purchaseForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -216,11 +235,19 @@ purchaseForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  if (!selectedTicketImageFile) {
+    setMessage(actionMessage, "Debes cargar una foto del ticket como evidencia.", "error");
+    return;
+  }
+
   const pointsEarned = calculatePoints(amount);
+  const customerFullName =
+    currentCustomerData.fullName ||
+    `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim();
 
   pendingPurchaseData = {
     uid: currentCustomerUid,
-    customerName: currentCustomerData.fullName || `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim(),
+    customerName: customerFullName,
     storeId,
     storeName: getStoreName(storeId),
     ticketDate,
@@ -228,7 +255,9 @@ purchaseForm.addEventListener("submit", async (e) => {
     amount,
     waiterName,
     notes,
-    pointsEarned
+    pointsEarned,
+    ticketImageFile: selectedTicketImageFile,
+    ticketImagePreview: selectedTicketImagePreview
   };
 
   renderConfirmSummary(pendingPurchaseData);
@@ -239,10 +268,21 @@ confirmPurchaseBtn.addEventListener("click", async () => {
   if (!pendingPurchaseData) return;
 
   try {
-    setMessage(actionMessage, "Registrando compra...", "info");
+    setMessage(actionMessage, "Subiendo evidencia y registrando compra...", "info");
     confirmPurchaseBtn.disabled = true;
 
-    const result = await registerPurchase(pendingPurchaseData);
+    const ticketImageUrl = await uploadTicketEvidence(
+      pendingPurchaseData.uid,
+      pendingPurchaseData.storeId,
+      pendingPurchaseData.ticketDate,
+      pendingPurchaseData.folio,
+      pendingPurchaseData.ticketImageFile
+    );
+
+    const result = await registerPurchase({
+      ...pendingPurchaseData,
+      ticketImageUrl
+    });
 
     closeConfirmModal();
     setMessage(
@@ -253,6 +293,7 @@ confirmPurchaseBtn.addEventListener("click", async () => {
 
     purchaseForm.reset();
     pendingPurchaseData = null;
+    clearTicketImageSelection();
 
     await loadCustomer(currentCustomerUid);
     await loadReports();
@@ -290,7 +331,9 @@ visitForm.addEventListener("submit", async (e) => {
 
     await registerVisit({
       uid: currentCustomerUid,
-      customerName: currentCustomerData.fullName || `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim(),
+      customerName:
+        currentCustomerData.fullName ||
+        `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim(),
       storeId,
       notes
     });
@@ -389,7 +432,11 @@ async function loadCustomer(uid) {
   currentCustomerUid = uid;
   currentCustomerData = data;
 
-  customerName.textContent = data.fullName || `${data.firstName || ""} ${data.lastName || ""}`.trim() || "-";
+  customerName.textContent =
+    data.fullName ||
+    `${data.firstName || ""} ${data.lastName || ""}`.trim() ||
+    "-";
+
   customerEmail.textContent = data.email || "-";
   customerWalletId.textContent = data.walletId || generateWalletId(uid);
   customerPoints.textContent = data.points ?? 0;
@@ -426,18 +473,77 @@ async function loadCustomerHistory(uid) {
     if (data.ticketFolio) extra.push(`Folio: ${data.ticketFolio}`);
     if (data.waiterName) extra.push(`Mesero: ${data.waiterName}`);
     if (typeof data.amount === "number") extra.push(`Monto: $${data.amount.toFixed(2)}`);
+    if (data.ticketImageUrl) extra.push(`Evidencia guardada`);
 
     div.innerHTML = `
       <strong>${escapeHtml(data.title || "Movimiento")}</strong>
       <p>${escapeHtml(data.description || "")}</p>
       <p>${escapeHtml(extra.join(" • "))}</p>
       <p>${formatDate(data.createdAt)}${formatPoints(data.pointsChange)}</p>
+      ${data.ticketImageUrl ? `<p><a class="report-link" href="${data.ticketImageUrl}" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>` : ""}
     `;
     historyList.appendChild(div);
   });
 }
 
-async function registerPurchase({ uid, customerName, storeId, storeName, ticketDate, folio, amount, waiterName, notes, pointsEarned }) {
+async function uploadTicketEvidence(uid, storeId, ticketDate, folio, file) {
+  if (!file) throw new Error("No hay imagen del ticket para subir.");
+
+  const safeStore = normalizeKey(storeId);
+  const safeDate = ticketDate;
+  const safeFolio = folio;
+  const extension = getFileExtension(file.name);
+  const filePath = `ticketEvidence/${uid}/${safeStore}/${safeDate}_${safeFolio}_${Date.now()}.${extension}`;
+
+  const storageRef = ref(storage, filePath);
+  await uploadBytes(storageRef, file);
+  return await getDownloadURL(storageRef);
+}
+
+function handleTicketImageChange(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    clearTicketImageSelection();
+    return;
+  }
+
+  selectedTicketImageFile = file;
+  ticketImageName.textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedTicketImagePreview = reader.result;
+    ticketPreview.src = selectedTicketImagePreview;
+    ticketPreview.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearTicketImageSelection() {
+  selectedTicketImageFile = null;
+  selectedTicketImagePreview = "";
+  purchaseTicketImage.value = "";
+  ticketImageName.textContent = "Ningún archivo seleccionado";
+  ticketPreview.src = "";
+  ticketPreview.classList.add("hidden");
+  confirmTicketPreview.src = "";
+  confirmTicketPreview.classList.add("hidden");
+}
+
+async function registerPurchase({
+  uid,
+  customerName,
+  storeId,
+  storeName,
+  ticketDate,
+  folio,
+  amount,
+  waiterName,
+  notes,
+  pointsEarned,
+  ticketImageUrl
+}) {
   const ticketKey = buildTicketKey(storeId, ticketDate, folio);
 
   const userRef = doc(db, "users", uid);
@@ -480,6 +586,7 @@ async function registerPurchase({ uid, customerName, storeId, storeName, ticketD
       waiterName,
       amount,
       pointsEarned,
+      ticketImageUrl: ticketImageUrl || "",
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
       managerName: managerUser.fullName,
@@ -499,6 +606,7 @@ async function registerPurchase({ uid, customerName, storeId, storeName, ticketD
       storeId,
       storeName,
       waiterName,
+      ticketImageUrl: ticketImageUrl || "",
       createdAt: serverTimestamp(),
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
@@ -520,6 +628,7 @@ async function registerPurchase({ uid, customerName, storeId, storeName, ticketD
       ticketFolio: folio,
       amount,
       waiterName,
+      ticketImageUrl: ticketImageUrl || "",
       pointsEarned,
       notes: notes || ""
     });
@@ -604,6 +713,7 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
       ticketFolio: "",
       amount: 0,
       waiterName: "",
+      ticketImageUrl: "",
       pointsEarned: 0,
       notes: notes || ""
     });
@@ -647,7 +757,7 @@ function renderReports(rows) {
   if (!rows.length) {
     reportsTableBody.innerHTML = `
       <tr>
-        <td colspan="10" class="empty-row">No hay registros para este periodo.</td>
+        <td colspan="11" class="empty-row">No hay registros para este periodo.</td>
       </tr>
     `;
     reportsSummary.textContent = "Sin registros para el filtro seleccionado.";
@@ -673,6 +783,9 @@ function renderReports(rows) {
       <td>${formatMoney(row.amount || 0)}</td>
       <td>${escapeHtml(row.waiterName || "-")}</td>
       <td>${Number(row.pointsEarned || 0)}</td>
+      <td>
+        ${row.ticketImageUrl ? `<a class="report-link" href="${row.ticketImageUrl}" target="_blank" rel="noopener noreferrer">Ver ticket</a>` : "-"}
+      </td>
     `;
     reportsTableBody.appendChild(tr);
   });
@@ -697,7 +810,8 @@ function exportReportsToCsv() {
     "Fecha ticket",
     "Monto",
     "Mesero",
-    "Puntos"
+    "Puntos",
+    "Evidencia"
   ];
 
   const lines = lastReportRows.map((row) => [
@@ -710,7 +824,8 @@ function exportReportsToCsv() {
     row.ticketDate || "",
     row.amount || 0,
     row.waiterName || "",
-    row.pointsEarned || 0
+    row.pointsEarned || 0,
+    row.ticketImageUrl || ""
   ]);
 
   const csvContent = [
@@ -740,6 +855,14 @@ function renderConfirmSummary(data) {
     <div class="confirm-item"><span>Puntos a otorgar</span><strong>${data.pointsEarned}</strong></div>
     <div class="confirm-item"><span>Gerente</span><strong>${escapeHtml(managerUser?.fullName || "-")}</strong></div>
   `;
+
+  if (data.ticketImagePreview) {
+    confirmTicketPreview.src = data.ticketImagePreview;
+    confirmTicketPreview.classList.remove("hidden");
+  } else {
+    confirmTicketPreview.src = "";
+    confirmTicketPreview.classList.add("hidden");
+  }
 }
 
 function openConfirmModal() {
@@ -748,6 +871,11 @@ function openConfirmModal() {
 
 function closeConfirmModal() {
   confirmModal.classList.add("hidden");
+}
+
+function getFileExtension(fileName) {
+  const parts = String(fileName).split(".");
+  return parts.length > 1 ? parts.pop().toLowerCase() : "jpg";
 }
 
 function calculatePoints(amount) {

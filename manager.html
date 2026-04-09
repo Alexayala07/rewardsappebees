@@ -37,7 +37,7 @@
         <div>
           <span class="badge">OPERACIÓN EN SUCURSAL</span>
           <h1>Validación de compras y visitas</h1>
-          <p>Escanea el QR del cliente y registra compras o visitas con control real.</p>
+          <p>Escanea el QR del cliente y registra compras o visitas con control real y evidencia.</p>
         </div>
 
         <div class="manager-badge">
@@ -164,13 +164,26 @@
                 <input type="text" id="purchaseNotes" placeholder="Mesa 12 / consumo cena" />
               </div>
 
-              <div class="formula-box">
+              <div class="input-group file-group full-span">
+                <label for="purchaseTicketImage">Foto del ticket (obligatoria)</label>
+                <input type="file" id="purchaseTicketImage" accept="image/*" capture="environment" required />
+                <div class="file-meta">
+                  <span id="ticketImageName">Ningún archivo seleccionado</span>
+                  <button type="button" id="clearTicketImageBtn" class="btn-secondary small">Quitar foto</button>
+                </div>
+              </div>
+
+              <div class="ticket-preview-wrap full-span" id="ticketPreviewWrap">
+                <img id="ticketPreview" class="ticket-preview hidden" alt="Vista previa del ticket" />
+              </div>
+
+              <div class="formula-box full-span">
                 <span>Regla actual:</span>
                 <strong>1 punto por cada $20 MXN</strong>
                 <small>Monto permitido: $50.00 a $5000.00</small>
               </div>
 
-              <button type="submit" class="btn-success full">Revisar compra antes de registrar</button>
+              <button type="submit" class="btn-success full-span">Revisar compra antes de registrar</button>
             </form>
           </div>
 
@@ -266,11 +279,12 @@
                   <th>Monto</th>
                   <th>Mesero</th>
                   <th>Puntos</th>
+                  <th>Evidencia</th>
                 </tr>
               </thead>
               <tbody id="reportsTableBody">
                 <tr>
-                  <td colspan="10" class="empty-row">No hay registros aún.</td>
+                  <td colspan="11" class="empty-row">No hay registros aún.</td>
                 </tr>
               </tbody>
             </table>
@@ -289,7 +303,10 @@
         <span class="dot"></span>
       </div>
 
-      <div class="confirm-grid" id="confirmSummary">
+      <div class="confirm-grid" id="confirmSummary"></div>
+
+      <div class="confirm-image-wrap" id="confirmImageWrap">
+        <img id="confirmTicketPreview" class="confirm-ticket-preview hidden" alt="Vista previa confirmación ticket" />
       </div>
 
       <div class="modal-actions">
