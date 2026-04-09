@@ -13,10 +13,14 @@ import {
   limit,
   getDocs,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
+  where,
+  Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const POINTS_DIVISOR = 20;
+const MIN_TICKET_AMOUNT = 50;
+const MAX_TICKET_AMOUNT = 5000;
 
 const STORES = [
   { id: "applebees_torres", name: "Applebee's Torres" },
@@ -31,6 +35,9 @@ const loadManualQrBtn = document.getElementById("loadManualQrBtn");
 const manualQrInput = document.getElementById("manualQrInput");
 const scannerMessage = document.getElementById("scannerMessage");
 const actionMessage = document.getElementById("actionMessage");
+const reportsMessage = document.getElementById("reportsMessage");
+
+const managerFullName = document.getElementById("managerFullName");
 
 const customerName = document.getElementById("customerName");
 const customerEmail = document.getElementById("customerEmail");
@@ -57,11 +64,25 @@ const visitNotes = document.getElementById("visitNotes");
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
+const confirmModal = document.getElementById("confirmModal");
+const confirmSummary = document.getElementById("confirmSummary");
+const cancelConfirmBtn = document.getElementById("cancelConfirmBtn");
+const confirmPurchaseBtn = document.getElementById("confirmPurchaseBtn");
+
+const reportRange = document.getElementById("reportRange");
+const reportType = document.getElementById("reportType");
+const loadReportsBtn = document.getElementById("loadReportsBtn");
+const exportCsvBtn = document.getElementById("exportCsvBtn");
+const reportsSummary = document.getElementById("reportsSummary");
+const reportsTableBody = document.getElementById("reportsTableBody");
+
 let html5QrCode = null;
 let scannerRunning = false;
 let managerUser = null;
 let currentCustomerUid = null;
 let currentCustomerData = null;
+let pendingPurchaseData = null;
+let lastReportRows = [];
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -88,11 +109,20 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
+    const fullName =
+      data.fullName ||
+      `${data.firstName || ""} ${data.lastName || ""}`.trim() ||
+      "Gerente";
+
     managerUser = {
       uid: user.uid,
       email: user.email || "",
-      role
+      role,
+      fullName
     };
+
+    managerFullName.textContent = fullName;
+    await loadReports();
   } catch (error) {
     console.error("Error validando gerente:", error);
     alert("No se pudo validar el acceso.");
@@ -115,7 +145,7 @@ loadManualQrBtn.addEventListener("click", async () => {
 logoutBtn.addEventListener("click", async () => {
   try {
     await signOut(auth);
-    window.location.href = "index.html";
+    window.location.href = "login-manager.html";
   } catch (error) {
     console.error(error);
     alert("No se pudo cerrar sesión.");
@@ -172,8 +202,12 @@ purchaseForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  if (!amount || amount <= 0) {
-    setMessage(actionMessage, "Ingresa un monto válido.", "error");
+  if (!amount || amount < MIN_TICKET_AMOUNT || amount > MAX_TICKET_AMOUNT) {
+    setMessage(
+      actionMessage,
+      `El monto debe estar entre $${MIN_TICKET_AMOUNT.toFixed(2)} y $${MAX_TICKET_AMOUNT.toFixed(2)}.`,
+      "error"
+    );
     return;
   }
 
@@ -182,19 +216,35 @@ purchaseForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const pointsEarned = calculatePoints(amount);
+
+  pendingPurchaseData = {
+    uid: currentCustomerUid,
+    customerName: currentCustomerData.fullName || `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim(),
+    storeId,
+    storeName: getStoreName(storeId),
+    ticketDate,
+    folio,
+    amount,
+    waiterName,
+    notes,
+    pointsEarned
+  };
+
+  renderConfirmSummary(pendingPurchaseData);
+  openConfirmModal();
+});
+
+confirmPurchaseBtn.addEventListener("click", async () => {
+  if (!pendingPurchaseData) return;
+
   try {
     setMessage(actionMessage, "Registrando compra...", "info");
+    confirmPurchaseBtn.disabled = true;
 
-    const result = await registerPurchase({
-      uid: currentCustomerUid,
-      storeId,
-      ticketDate,
-      folio,
-      amount,
-      waiterName,
-      notes
-    });
+    const result = await registerPurchase(pendingPurchaseData);
 
+    closeConfirmModal();
     setMessage(
       actionMessage,
       `Compra registrada. +${result.pointsEarned} puntos y +1 visita.`,
@@ -202,12 +252,21 @@ purchaseForm.addEventListener("submit", async (e) => {
     );
 
     purchaseForm.reset();
-    await loadCustomer(currentCustomerUid);
+    pendingPurchaseData = null;
 
+    await loadCustomer(currentCustomerUid);
+    await loadReports();
   } catch (error) {
     console.error(error);
     setMessage(actionMessage, error.message || "No se pudo registrar la compra.", "error");
+  } finally {
+    confirmPurchaseBtn.disabled = false;
   }
+});
+
+cancelConfirmBtn.addEventListener("click", () => {
+  pendingPurchaseData = null;
+  closeConfirmModal();
 });
 
 visitForm.addEventListener("submit", async (e) => {
@@ -231,6 +290,7 @@ visitForm.addEventListener("submit", async (e) => {
 
     await registerVisit({
       uid: currentCustomerUid,
+      customerName: currentCustomerData.fullName || `${currentCustomerData.firstName || ""} ${currentCustomerData.lastName || ""}`.trim(),
       storeId,
       notes
     });
@@ -239,11 +299,19 @@ visitForm.addEventListener("submit", async (e) => {
 
     visitForm.reset();
     await loadCustomer(currentCustomerUid);
-
+    await loadReports();
   } catch (error) {
     console.error(error);
     setMessage(actionMessage, error.message || "No se pudo registrar la visita.", "error");
   }
+});
+
+loadReportsBtn.addEventListener("click", async () => {
+  await loadReports();
+});
+
+exportCsvBtn.addEventListener("click", () => {
+  exportReportsToCsv();
 });
 
 async function startScanner() {
@@ -353,7 +421,6 @@ async function loadCustomerHistory(uid) {
     div.className = "history-item";
 
     const extra = [];
-
     if (data.storeName) extra.push(`Sucursal: ${data.storeName}`);
     if (data.ticketDate) extra.push(`Fecha ticket: ${data.ticketDate}`);
     if (data.ticketFolio) extra.push(`Folio: ${data.ticketFolio}`);
@@ -370,15 +437,13 @@ async function loadCustomerHistory(uid) {
   });
 }
 
-async function registerPurchase({ uid, storeId, ticketDate, folio, amount, waiterName, notes }) {
-  const storeName = getStoreName(storeId);
+async function registerPurchase({ uid, customerName, storeId, storeName, ticketDate, folio, amount, waiterName, notes, pointsEarned }) {
   const ticketKey = buildTicketKey(storeId, ticketDate, folio);
 
   const userRef = doc(db, "users", uid);
   const ticketRef = doc(db, "usedTickets", ticketKey);
   const movementRef = doc(collection(db, "users", uid, "movements"));
-
-  const pointsEarned = calculatePoints(amount);
+  const logRef = doc(collection(db, "managerLogs"));
 
   await runTransaction(db, async (transaction) => {
     const userSnap = await transaction.get(userRef);
@@ -417,6 +482,7 @@ async function registerPurchase({ uid, storeId, ticketDate, folio, amount, waite
       pointsEarned,
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
       createdAt: serverTimestamp(),
       notes: notes || ""
     });
@@ -436,6 +502,25 @@ async function registerPurchase({ uid, storeId, ticketDate, folio, amount, waite
       createdAt: serverTimestamp(),
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
+      notes: notes || ""
+    });
+
+    transaction.set(logRef, {
+      type: "purchase",
+      createdAt: serverTimestamp(),
+      managerUid: managerUser.uid,
+      managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
+      customerUid: uid,
+      customerName,
+      storeId,
+      storeName,
+      ticketDate,
+      ticketFolio: folio,
+      amount,
+      waiterName,
+      pointsEarned,
       notes: notes || ""
     });
   });
@@ -443,7 +528,7 @@ async function registerPurchase({ uid, storeId, ticketDate, folio, amount, waite
   return { pointsEarned };
 }
 
-async function registerVisit({ uid, storeId, notes }) {
+async function registerVisit({ uid, customerName, storeId, notes }) {
   const storeName = getStoreName(storeId);
   const visitDate = getTodayDateIso();
   const visitKey = `${uid}_${visitDate}_${normalizeKey(storeId)}`;
@@ -451,6 +536,7 @@ async function registerVisit({ uid, storeId, notes }) {
   const userRef = doc(db, "users", uid);
   const visitRef = doc(db, "validatedVisits", visitKey);
   const movementRef = doc(collection(db, "users", uid, "movements"));
+  const logRef = doc(collection(db, "managerLogs"));
 
   await runTransaction(db, async (transaction) => {
     const userSnap = await transaction.get(userRef);
@@ -483,6 +569,7 @@ async function registerVisit({ uid, storeId, notes }) {
       visitDate,
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
       createdAt: serverTimestamp(),
       notes: notes || ""
     });
@@ -499,9 +586,168 @@ async function registerVisit({ uid, storeId, notes }) {
       createdAt: serverTimestamp(),
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
+      notes: notes || ""
+    });
+
+    transaction.set(logRef, {
+      type: "visit",
+      createdAt: serverTimestamp(),
+      managerUid: managerUser.uid,
+      managerEmail: managerUser.email,
+      managerName: managerUser.fullName,
+      customerUid: uid,
+      customerName,
+      storeId,
+      storeName,
+      ticketDate: "",
+      ticketFolio: "",
+      amount: 0,
+      waiterName: "",
+      pointsEarned: 0,
       notes: notes || ""
     });
   });
+}
+
+async function loadReports() {
+  try {
+    setMessage(reportsMessage, "Cargando reporte...", "info");
+
+    const range = getRangeDates(reportRange.value);
+    const logsRef = collection(db, "managerLogs");
+
+    const logsQuery = query(
+      logsRef,
+      where("createdAt", ">=", Timestamp.fromDate(range.start)),
+      where("createdAt", "<=", Timestamp.fromDate(range.end)),
+      orderBy("createdAt", "desc"),
+      limit(500)
+    );
+
+    const snapshot = await getDocs(logsQuery);
+    let rows = snapshot.docs.map(docItem => docItem.data());
+
+    if (reportType.value !== "all") {
+      rows = rows.filter(item => item.type === reportType.value);
+    }
+
+    lastReportRows = rows;
+    renderReports(rows);
+    setMessage(reportsMessage, `Reporte cargado: ${rows.length} registros.`, "success");
+  } catch (error) {
+    console.error("Error cargando reportes:", error);
+    setMessage(reportsMessage, "No se pudo cargar el reporte.", "error");
+  }
+}
+
+function renderReports(rows) {
+  reportsTableBody.innerHTML = "";
+
+  if (!rows.length) {
+    reportsTableBody.innerHTML = `
+      <tr>
+        <td colspan="10" class="empty-row">No hay registros para este periodo.</td>
+      </tr>
+    `;
+    reportsSummary.textContent = "Sin registros para el filtro seleccionado.";
+    return;
+  }
+
+  let totalPoints = 0;
+  let totalAmount = 0;
+
+  rows.forEach((row) => {
+    totalPoints += Number(row.pointsEarned || 0);
+    totalAmount += Number(row.amount || 0);
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(formatDate(row.createdAt))}</td>
+      <td>${escapeHtml(row.managerName || "-")}</td>
+      <td>${escapeHtml(row.customerName || "-")}</td>
+      <td>${escapeHtml(getTypeLabel(row.type))}</td>
+      <td>${escapeHtml(row.storeName || "-")}</td>
+      <td>${escapeHtml(row.ticketFolio || "-")}</td>
+      <td>${escapeHtml(row.ticketDate || "-")}</td>
+      <td>${formatMoney(row.amount || 0)}</td>
+      <td>${escapeHtml(row.waiterName || "-")}</td>
+      <td>${Number(row.pointsEarned || 0)}</td>
+    `;
+    reportsTableBody.appendChild(tr);
+  });
+
+  reportsSummary.textContent =
+    `Registros: ${rows.length} • Puntos otorgados: ${totalPoints} • Monto acumulado: ${formatMoney(totalAmount)}`;
+}
+
+function exportReportsToCsv() {
+  if (!lastReportRows.length) {
+    setMessage(reportsMessage, "No hay datos para exportar.", "error");
+    return;
+  }
+
+  const headers = [
+    "Fecha y hora",
+    "Gerente",
+    "Cliente",
+    "Tipo",
+    "Sucursal",
+    "Folio",
+    "Fecha ticket",
+    "Monto",
+    "Mesero",
+    "Puntos"
+  ];
+
+  const lines = lastReportRows.map((row) => [
+    formatDate(row.createdAt),
+    row.managerName || "",
+    row.customerName || "",
+    getTypeLabel(row.type),
+    row.storeName || "",
+    row.ticketFolio || "",
+    row.ticketDate || "",
+    row.amount || 0,
+    row.waiterName || "",
+    row.pointsEarned || 0
+  ]);
+
+  const csvContent = [
+    headers.join(","),
+    ...lines.map(line =>
+      line.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")
+    )
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `reporte_manager_${reportRange.value}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function renderConfirmSummary(data) {
+  confirmSummary.innerHTML = `
+    <div class="confirm-item"><span>Cliente</span><strong>${escapeHtml(data.customerName || "-")}</strong></div>
+    <div class="confirm-item"><span>Sucursal</span><strong>${escapeHtml(data.storeName)}</strong></div>
+    <div class="confirm-item"><span>Fecha del ticket</span><strong>${escapeHtml(data.ticketDate)}</strong></div>
+    <div class="confirm-item"><span>Folio</span><strong>${escapeHtml(data.folio)}</strong></div>
+    <div class="confirm-item"><span>Monto</span><strong>${formatMoney(data.amount)}</strong></div>
+    <div class="confirm-item"><span>Mesero</span><strong>${escapeHtml(data.waiterName)}</strong></div>
+    <div class="confirm-item"><span>Puntos a otorgar</span><strong>${data.pointsEarned}</strong></div>
+    <div class="confirm-item"><span>Gerente</span><strong>${escapeHtml(managerUser?.fullName || "-")}</strong></div>
+  `;
+}
+
+function openConfirmModal() {
+  confirmModal.classList.remove("hidden");
+}
+
+function closeConfirmModal() {
+  confirmModal.classList.add("hidden");
 }
 
 function calculatePoints(amount) {
@@ -557,14 +803,54 @@ function getTodayDateIso() {
   return `${year}-${month}-${day}`;
 }
 
+function getRangeDates(range) {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (range === "week") {
+    const day = start.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diff);
+  }
+
+  if (range === "month") {
+    start.setDate(1);
+  }
+
+  return { start, end };
+}
+
+function getTypeLabel(type) {
+  switch (type) {
+    case "purchase":
+      return "Compra";
+    case "visit":
+      return "Visita";
+    case "redeem":
+      return "Canje";
+    default:
+      return type || "-";
+  }
+}
+
 function generateWalletId(uid) {
   return `AB-${uid.substring(0, 6).toUpperCase()}`;
 }
 
 function formatDate(timestamp) {
   if (!timestamp || !timestamp.toDate) return "Fecha pendiente";
-  const date = timestamp.toDate();
-  return date.toLocaleString("es-MX");
+  return timestamp.toDate().toLocaleString("es-MX");
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN"
+  }).format(Number(value || 0));
 }
 
 function formatPoints(value) {

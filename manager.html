@@ -12,19 +12,22 @@
 <body>
   <main class="manager-layout">
     <aside class="sidebar">
-      <div class="brand-box">
-        <img src="assets/Applebeewine.png" alt="Applebee's Logo" class="brand-logo">
-        <div>
-          <h2>Applebee’s</h2>
-          <p>Panel Gerente / Caja</p>
+      <div>
+        <div class="brand-box">
+          <img src="assets/Applebeewine.png" alt="Applebee's Logo" class="brand-logo">
+          <div>
+            <h2>Applebee’s</h2>
+            <p>Panel Gerente / Caja</p>
+          </div>
         </div>
-      </div>
 
-      <nav class="side-nav">
-        <a href="#scannerSection" class="nav-link active">Escáner</a>
-        <a href="#customerSection" class="nav-link">Cliente</a>
-        <a href="#actionsSection" class="nav-link">Acciones</a>
-      </nav>
+        <nav class="side-nav">
+          <a href="#scannerSection" class="nav-link active">Escáner</a>
+          <a href="#customerSection" class="nav-link">Cliente</a>
+          <a href="#actionsSection" class="nav-link">Acciones</a>
+          <a href="#reportsSection" class="nav-link">Reportes</a>
+        </nav>
+      </div>
 
       <button id="logoutBtn" class="logout-btn">Cerrar sesión</button>
     </aside>
@@ -35,6 +38,11 @@
           <span class="badge">OPERACIÓN EN SUCURSAL</span>
           <h1>Validación de compras y visitas</h1>
           <p>Escanea el QR del cliente y registra compras o visitas con control real.</p>
+        </div>
+
+        <div class="manager-badge">
+          <span>Gerente en turno</span>
+          <strong id="managerFullName">-</strong>
         </div>
       </header>
 
@@ -159,9 +167,10 @@
               <div class="formula-box">
                 <span>Regla actual:</span>
                 <strong>1 punto por cada $20 MXN</strong>
+                <small>Monto permitido: $50.00 a $5000.00</small>
               </div>
 
-              <button type="submit" class="btn-success full">Registrar compra y visita</button>
+              <button type="submit" class="btn-success full">Revisar compra antes de registrar</button>
             </form>
           </div>
 
@@ -205,8 +214,90 @@
           </div>
         </article>
       </section>
+
+      <section class="reports-section" id="reportsSection">
+        <article class="card reports-card">
+          <div class="card-header">
+            <h3>Reportes operativos</h3>
+            <span class="dot"></span>
+          </div>
+
+          <div class="reports-toolbar">
+            <div class="input-group compact">
+              <label for="reportRange">Periodo</label>
+              <select id="reportRange">
+                <option value="day">Hoy</option>
+                <option value="week">Esta semana</option>
+                <option value="month">Este mes</option>
+              </select>
+            </div>
+
+            <div class="input-group compact">
+              <label for="reportType">Tipo</label>
+              <select id="reportType">
+                <option value="all">Todos</option>
+                <option value="purchase">Compras</option>
+                <option value="visit">Visitas</option>
+                <option value="redeem">Canjes</option>
+              </select>
+            </div>
+
+            <div class="reports-buttons">
+              <button id="loadReportsBtn" class="btn-primary">Cargar reporte</button>
+              <button id="exportCsvBtn" class="btn-secondary">Exportar CSV</button>
+            </div>
+          </div>
+
+          <div class="reports-summary" id="reportsSummary">
+            Sin datos cargados.
+          </div>
+
+          <div class="table-wrap">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Fecha y hora</th>
+                  <th>Gerente</th>
+                  <th>Cliente</th>
+                  <th>Tipo</th>
+                  <th>Sucursal</th>
+                  <th>Folio</th>
+                  <th>Fecha ticket</th>
+                  <th>Monto</th>
+                  <th>Mesero</th>
+                  <th>Puntos</th>
+                </tr>
+              </thead>
+              <tbody id="reportsTableBody">
+                <tr>
+                  <td colspan="10" class="empty-row">No hay registros aún.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="reportsMessage" class="message-box"></div>
+        </article>
+      </section>
     </section>
   </main>
+
+  <div class="modal-overlay hidden" id="confirmModal">
+    <div class="modal-card">
+      <div class="card-header">
+        <h3>Confirmar compra</h3>
+        <span class="dot"></span>
+      </div>
+
+      <div class="confirm-grid" id="confirmSummary">
+      </div>
+
+      <div class="modal-actions">
+        <button id="cancelConfirmBtn" class="btn-secondary">Cancelar</button>
+        <button id="confirmPurchaseBtn" class="btn-success">Confirmar registro</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/html5-qrcode" defer></script>
   <script type="module" src="js/manager.js"></script>
