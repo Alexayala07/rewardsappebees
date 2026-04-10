@@ -167,15 +167,6 @@
               <div class="input-group file-group full-span">
                 <label>Foto del ticket (obligatoria)</label>
 
-                <input
-                  type="file"
-                  id="purchaseTicketImage"
-                  accept="image/*"
-                  capture="environment"
-                  class="hidden-file-input"
-                  required
-                />
-
                 <div class="ticket-actions">
                   <button type="button" id="takeTicketPhotoBtn" class="btn-primary">
                     Tomar foto del ticket
@@ -186,7 +177,17 @@
                 </div>
 
                 <div class="file-meta">
-                  <span id="ticketImageName">Ningún archivo seleccionado</span>
+                  <span id="ticketImageName">Aún no se ha capturado una imagen</span>
+                </div>
+              </div>
+
+              <div class="camera-box full-span hidden" id="cameraBox">
+                <video id="ticketCamera" autoplay playsinline></video>
+                <canvas id="ticketCanvas" class="hidden"></canvas>
+
+                <div class="camera-actions">
+                  <button type="button" id="captureTicketBtn" class="btn-success">Capturar ticket</button>
+                  <button type="button" id="closeCameraBtn" class="btn-secondary">Cerrar cámara</button>
                 </div>
               </div>
 
@@ -204,15 +205,19 @@
 
                 <div class="ocr-results">
                   <div class="profile-row">
-                    <span>Folio detectado</span>
-                    <strong id="ocrTicketFolio">-</strong>
+                    <span>Mesero detectado</span>
+                    <strong id="ocrWaiterName">-</strong>
                   </div>
                   <div class="profile-row">
                     <span>Fecha detectada</span>
                     <strong id="ocrTicketDate">-</strong>
                   </div>
                   <div class="profile-row">
-                    <span>Monto detectado</span>
+                    <span>Folio detectado</span>
+                    <strong id="ocrTicketFolio">-</strong>
+                  </div>
+                  <div class="profile-row">
+                    <span>Total detectado</span>
                     <strong id="ocrTicketAmount">-</strong>
                   </div>
                 </div>

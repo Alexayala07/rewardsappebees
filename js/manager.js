@@ -72,8 +72,15 @@ const clearTicketImageBtn = document.getElementById("clearTicketImageBtn");
 const ticketPreview = document.getElementById("ticketPreview");
 const ticketImageName = document.getElementById("ticketImageName");
 
+const cameraBox = document.getElementById("cameraBox");
+const ticketCamera = document.getElementById("ticketCamera");
+const ticketCanvas = document.getElementById("ticketCanvas");
+const captureTicketBtn = document.getElementById("captureTicketBtn");
+const closeCameraBtn = document.getElementById("closeCameraBtn");
+
 const readTicketBtn = document.getElementById("readTicketBtn");
 const ocrStatus = document.getElementById("ocrStatus");
+const ocrWaiterName = document.getElementById("ocrWaiterName");
 const ocrTicketFolio = document.getElementById("ocrTicketFolio");
 const ocrTicketDate = document.getElementById("ocrTicketDate");
 const ocrTicketAmount = document.getElementById("ocrTicketAmount");
@@ -104,9 +111,13 @@ let currentCustomerUid = null;
 let currentCustomerData = null;
 let pendingPurchaseData = null;
 let lastReportRows = [];
+
 let selectedTicketImageFile = null;
 let selectedTicketImagePreview = "";
+let ticketCameraStream = null;
+
 let detectedTicketData = {
+  waiterName: "",
   folio: "",
   ticketDate: "",
   amount: null
@@ -173,6 +184,7 @@ loadManualQrBtn.addEventListener("click", async () => {
 logoutBtn.addEventListener("click", async () => {
   try {
     await signOut(auth);
+    closeTicketCamera();
     window.location.href = "login-manager.html";
   } catch (error) {
     console.error(error);
@@ -200,22 +212,78 @@ purchaseWaiterName.addEventListener("input", () => {
   purchaseWaiterName.value = normalizePersonName(purchaseWaiterName.value);
 });
 
-takeTicketPhotoBtn.addEventListener("click", () => {
-  purchaseTicketImage.click();
+takeTicketPhotoBtn?.addEventListener("click", async () => {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessage(actionMessage, "Este dispositivo no permite abrir la cámara desde el navegador.", "error");
+      return;
+    }
+
+    closeTicketCamera();
+
+    ticketCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" }
+      },
+      audio: false
+    });
+
+    ticketCamera.srcObject = ticketCameraStream;
+    cameraBox.classList.remove("hidden");
+    ticketImageName.textContent = "Cámara activa. Enfoca el ticket y presiona capturar.";
+    setMessage(actionMessage, "Cámara abierta correctamente.", "success");
+  } catch (error) {
+    console.error("Error abriendo cámara:", error);
+    setMessage(actionMessage, "No se pudo abrir la cámara del dispositivo.", "error");
+  }
 });
 
-purchaseTicketImage.addEventListener("change", handleTicketImageChange);
-clearTicketImageBtn.addEventListener("click", clearTicketImageSelection);
+captureTicketBtn?.addEventListener("click", () => {
+  if (!ticketCamera || !ticketCanvas) return;
 
-readTicketBtn.addEventListener("click", async () => {
+  if (!ticketCamera.videoWidth || !ticketCamera.videoHeight) {
+    setMessage(actionMessage, "La cámara aún no está lista.", "error");
+    return;
+  }
+
+  ticketCanvas.width = ticketCamera.videoWidth;
+  ticketCanvas.height = ticketCamera.videoHeight;
+
+  const ctx = ticketCanvas.getContext("2d");
+  ctx.drawImage(ticketCamera, 0, 0, ticketCanvas.width, ticketCanvas.height);
+
+  const imageDataUrl = ticketCanvas.toDataURL("image/jpeg", 0.95);
+
+  selectedTicketImagePreview = imageDataUrl;
+  ticketPreview.src = imageDataUrl;
+  ticketPreview.classList.remove("hidden");
+  ticketImageName.textContent = "Ticket capturado correctamente";
+
+  selectedTicketImageFile = dataURLToFile(imageDataUrl, `ticket_${Date.now()}.jpg`);
+
+  closeTicketCamera();
+  setMessage(actionMessage, "Foto del ticket capturada.", "success");
+});
+
+closeCameraBtn?.addEventListener("click", () => {
+  closeTicketCamera();
+});
+
+if (purchaseTicketImage) {
+  purchaseTicketImage.addEventListener("change", handleTicketImageChange);
+}
+
+clearTicketImageBtn?.addEventListener("click", clearTicketImageSelection);
+
+readTicketBtn?.addEventListener("click", async () => {
   if (!selectedTicketImageFile) {
-    setMessage(ocrStatus, "Primero toma o selecciona una foto del ticket.", "error");
+    setMessage(ocrStatus, "Primero debes tomar la foto del ticket.", "error");
     return;
   }
 
   try {
     readTicketBtn.disabled = true;
-    setMessage(ocrStatus, "Leyendo ticket, espera...", "info");
+    setMessage(ocrStatus, "Leyendo ticket...", "info");
 
     const result = await Tesseract.recognize(selectedTicketImageFile, "spa+eng");
     const rawText = result?.data?.text || "";
@@ -223,15 +291,17 @@ readTicketBtn.addEventListener("click", async () => {
     const parsed = parseTicketText(rawText);
     detectedTicketData = parsed;
 
-    ocrTicketFolio.textContent = parsed.folio || "-";
+    ocrWaiterName.textContent = parsed.waiterName || "-";
     ocrTicketDate.textContent = parsed.ticketDate || "-";
+    ocrTicketFolio.textContent = parsed.folio || "-";
     ocrTicketAmount.textContent = parsed.amount != null ? formatMoney(parsed.amount) : "-";
 
-    if (parsed.folio) purchaseTicketFolio.value = parsed.folio;
+    if (parsed.waiterName) purchaseWaiterName.value = parsed.waiterName;
     if (parsed.ticketDate) purchaseTicketDate.value = parsed.ticketDate;
+    if (parsed.folio) purchaseTicketFolio.value = parsed.folio;
     if (parsed.amount != null) purchaseAmount.value = parsed.amount.toFixed(2);
 
-    setMessage(ocrStatus, "Lectura completada. Revisa los datos detectados.", "success");
+    setMessage(ocrStatus, "Ticket leído correctamente.", "success");
   } catch (error) {
     console.error("Error OCR:", error);
     setMessage(ocrStatus, "No se pudo leer el ticket.", "error");
@@ -285,7 +355,7 @@ purchaseForm.addEventListener("submit", async (e) => {
   }
 
   if (!selectedTicketImageFile) {
-    setMessage(actionMessage, "Debes cargar una foto del ticket como evidencia.", "error");
+    setMessage(actionMessage, "Debes capturar una foto del ticket como evidencia.", "error");
     return;
   }
 
@@ -293,13 +363,14 @@ purchaseForm.addEventListener("submit", async (e) => {
     manualFolio: folio,
     manualDate: ticketDate,
     manualAmount: amount,
+    manualWaiter: waiterName,
     detected: detectedTicketData
   });
 
   if (!validation.ok) {
     setMessage(
       actionMessage,
-      validation.message || "Los datos ingresados no son iguales al ticket.",
+      validation.message || "Los datos ingresados no coinciden con el ticket.",
       "error"
     );
     return;
@@ -592,22 +663,35 @@ function clearTicketImageSelection() {
   selectedTicketImageFile = null;
   selectedTicketImagePreview = "";
   detectedTicketData = {
+    waiterName: "",
     folio: "",
     ticketDate: "",
     amount: null
   };
 
-  purchaseTicketImage.value = "";
-  ticketImageName.textContent = "Ningún archivo seleccionado";
+  if (purchaseTicketImage) purchaseTicketImage.value = "";
+
+  ticketImageName.textContent = "Aún no se ha capturado una imagen";
   ticketPreview.src = "";
   ticketPreview.classList.add("hidden");
   confirmTicketPreview.src = "";
   confirmTicketPreview.classList.add("hidden");
 
+  if (ocrWaiterName) ocrWaiterName.textContent = "-";
   ocrTicketFolio.textContent = "-";
   ocrTicketDate.textContent = "-";
   ocrTicketAmount.textContent = "-";
   setMessage(ocrStatus, "Sin lectura aún.", "info");
+}
+
+function closeTicketCamera() {
+  if (ticketCameraStream) {
+    ticketCameraStream.getTracks().forEach(track => track.stop());
+    ticketCameraStream = null;
+  }
+
+  if (ticketCamera) ticketCamera.srcObject = null;
+  if (cameraBox) cameraBox.classList.add("hidden");
 }
 
 async function registerPurchase({
@@ -972,11 +1056,12 @@ function closeConfirmModal() {
 function parseTicketText(rawText) {
   const text = normalizeOcrText(rawText);
 
-  const folio = extractTicketFolio(text);
-  const ticketDate = extractTicketDate(text);
-  const amount = extractTicketAmount(text);
-
-  return { folio, ticketDate, amount };
+  return {
+    waiterName: extractWaiterName(text),
+    folio: extractTicketFolio(text),
+    ticketDate: extractTicketDate(text),
+    amount: extractTicketAmount(text)
+  };
 }
 
 function normalizeOcrText(text) {
@@ -986,8 +1071,24 @@ function normalizeOcrText(text) {
     .trim();
 }
 
+function extractWaiterName(text) {
+  const match = text.match(/mesero[:\s]+([A-ZÁÉÍÓÚÑ ]{2,})/i);
+  if (!match) return "";
+  return normalizePersonName(match[1]);
+}
+
 function extractTicketFolio(text) {
   const lines = text.split("\n").map(line => line.trim()).filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/\b\d{2}:\d{2}\s?(AM|PM)\b/i.test(line)) {
+      if (lines[i + 1] && /\b\d{5}\b/.test(lines[i + 1])) {
+        return lines[i + 1].match(/\b\d{5}\b/)[0];
+      }
+    }
+  }
 
   for (const line of lines) {
     const lower = line.toLowerCase();
@@ -1011,21 +1112,34 @@ function extractTicketFolio(text) {
 }
 
 function extractTicketDate(text) {
-  const match =
+  const slashMatch = text.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
+  if (slashMatch) {
+    return `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
+  }
+
+  const dashMatch =
     text.match(/\b(20\d{2})[-\/](\d{2})[-\/](\d{2})\b/) ||
     text.match(/\b(\d{2})[-\/](\d{2})[-\/](20\d{2})\b/);
 
-  if (!match) return "";
+  if (!dashMatch) return "";
 
-  if (match[1].length === 4) {
-    return `${match[1]}-${match[2]}-${match[3]}`;
+  if (dashMatch[1].length === 4) {
+    return `${dashMatch[1]}-${dashMatch[2]}-${dashMatch[3]}`;
   }
 
-  return `${match[3]}-${match[2]}-${match[1]}`;
+  return `${dashMatch[3]}-${dashMatch[2]}-${dashMatch[1]}`;
 }
 
 function extractTicketAmount(text) {
   const lines = text.split("\n").map(line => line.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    if (/^total\b/i.test(line)) {
+      const match = line.match(/(\d+[.,]\d{2})/);
+      if (match) return parseAmount(match[1]);
+    }
+  }
+
   const candidates = [];
 
   for (const line of lines) {
@@ -1041,21 +1155,20 @@ function extractTicketAmount(text) {
     }
   }
 
-  if (!candidates.length) {
-    const allAmounts = [...text.matchAll(/(\d+[.,]\d{2})/g)].map(m => parseAmount(m[1]));
-    const valid = allAmounts.filter(n => !Number.isNaN(n));
-    if (valid.length) return Math.max(...valid);
-    return null;
+  if (candidates.length) {
+    return Math.max(...candidates);
   }
 
-  return Math.max(...candidates);
+  const allAmounts = [...text.matchAll(/(\d+[.,]\d{2})/g)].map(m => parseAmount(m[1]));
+  const valid = allAmounts.filter(n => !Number.isNaN(n));
+  return valid.length ? Math.max(...valid) : null;
 }
 
 function parseAmount(value) {
   return Number(String(value).replace(",", "."));
 }
 
-function validateManualVsDetected({ manualFolio, manualDate, manualAmount, detected }) {
+function validateManualVsDetected({ manualFolio, manualDate, manualAmount, manualWaiter, detected }) {
   if (!detected.folio && !detected.ticketDate && detected.amount == null) {
     return {
       ok: false,
@@ -1066,14 +1179,14 @@ function validateManualVsDetected({ manualFolio, manualDate, manualAmount, detec
   if (detected.folio && manualFolio !== detected.folio) {
     return {
       ok: false,
-      message: "Los datos que ingresaste no son iguales al ticket: el folio no coincide."
+      message: "Los datos ingresados no coinciden con el ticket: el folio no coincide."
     };
   }
 
   if (detected.ticketDate && manualDate !== detected.ticketDate) {
     return {
       ok: false,
-      message: "Los datos que ingresaste no son iguales al ticket: la fecha no coincide."
+      message: "Los datos ingresados no coinciden con el ticket: la fecha no coincide."
     };
   }
 
@@ -1082,12 +1195,33 @@ function validateManualVsDetected({ manualFolio, manualDate, manualAmount, detec
     if (diff > 0.01) {
       return {
         ok: false,
-        message: "Los datos que ingresaste no son iguales al ticket: el monto no coincide."
+        message: "Los datos ingresados no coinciden con el ticket: el monto no coincide."
       };
     }
   }
 
+  if (detected.waiterName && normalizePersonName(manualWaiter) !== detected.waiterName) {
+    return {
+      ok: false,
+      message: "Los datos ingresados no coinciden con el ticket: el mesero no coincide."
+    };
+  }
+
   return { ok: true };
+}
+
+function dataURLToFile(dataUrl, fileName) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+
+  return new File([u8arr], fileName, { type: mime });
 }
 
 function getFileExtension(fileName) {
@@ -1206,6 +1340,8 @@ function formatBalanceChange(value) {
 }
 
 function setMessage(element, text, type) {
+  if (!element) return;
+
   element.textContent = text;
   element.style.color =
     type === "success" ? "#52d49b" :
