@@ -165,16 +165,57 @@
               </div>
 
               <div class="input-group file-group full-span">
-                <label for="purchaseTicketImage">Foto del ticket (obligatoria)</label>
-                <input type="file" id="purchaseTicketImage" accept="image/*" capture="environment" required />
+                <label>Foto del ticket (obligatoria)</label>
+
+                <input
+                  type="file"
+                  id="purchaseTicketImage"
+                  accept="image/*"
+                  capture="environment"
+                  class="hidden-file-input"
+                  required
+                />
+
+                <div class="ticket-actions">
+                  <button type="button" id="takeTicketPhotoBtn" class="btn-primary">
+                    Tomar foto del ticket
+                  </button>
+                  <button type="button" id="clearTicketImageBtn" class="btn-secondary small">
+                    Quitar foto
+                  </button>
+                </div>
+
                 <div class="file-meta">
                   <span id="ticketImageName">Ningún archivo seleccionado</span>
-                  <button type="button" id="clearTicketImageBtn" class="btn-secondary small">Quitar foto</button>
                 </div>
               </div>
 
               <div class="ticket-preview-wrap full-span" id="ticketPreviewWrap">
                 <img id="ticketPreview" class="ticket-preview hidden" alt="Vista previa del ticket" />
+              </div>
+
+              <div class="ocr-box full-span">
+                <div class="ocr-header">
+                  <strong>Lectura automática del ticket</strong>
+                  <button type="button" id="readTicketBtn" class="btn-primary">Leer ticket</button>
+                </div>
+
+                <div id="ocrStatus" class="message-box">Sin lectura aún.</div>
+
+                <div class="ocr-results">
+                  <div class="profile-row">
+                    <span>Folio detectado</span>
+                    <strong id="ocrTicketFolio">-</strong>
+                  </div>
+                  <div class="profile-row">
+                    <span>Fecha detectada</span>
+                    <strong id="ocrTicketDate">-</strong>
+                  </div>
+                  <div class="profile-row">
+                    <span>Monto detectado</span>
+                    <strong id="ocrTicketAmount">-</strong>
+                  </div>
+                </div>
               </div>
 
               <div class="formula-box full-span">
@@ -316,6 +357,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode" defer></script>
   <script type="module" src="js/manager.js"></script>
 </body>

@@ -27,7 +27,7 @@ import {
 
 const storage = getStorage(app);
 
-const CASHBACK_PERCENT = 0.05; // 5%
+const CASHBACK_PERCENT = 0.05;
 const MIN_TICKET_AMOUNT = 50;
 const MAX_TICKET_AMOUNT = 5000;
 
@@ -67,9 +67,16 @@ const purchaseAmount = document.getElementById("purchaseAmount");
 const purchaseWaiterName = document.getElementById("purchaseWaiterName");
 const purchaseNotes = document.getElementById("purchaseNotes");
 const purchaseTicketImage = document.getElementById("purchaseTicketImage");
+const takeTicketPhotoBtn = document.getElementById("takeTicketPhotoBtn");
 const clearTicketImageBtn = document.getElementById("clearTicketImageBtn");
 const ticketPreview = document.getElementById("ticketPreview");
 const ticketImageName = document.getElementById("ticketImageName");
+
+const readTicketBtn = document.getElementById("readTicketBtn");
+const ocrStatus = document.getElementById("ocrStatus");
+const ocrTicketFolio = document.getElementById("ocrTicketFolio");
+const ocrTicketDate = document.getElementById("ocrTicketDate");
+const ocrTicketAmount = document.getElementById("ocrTicketAmount");
 
 const visitStoreId = document.getElementById("visitStoreId");
 const visitNotes = document.getElementById("visitNotes");
@@ -99,6 +106,11 @@ let pendingPurchaseData = null;
 let lastReportRows = [];
 let selectedTicketImageFile = null;
 let selectedTicketImagePreview = "";
+let detectedTicketData = {
+  folio: "",
+  ticketDate: "",
+  amount: null
+};
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -188,8 +200,45 @@ purchaseWaiterName.addEventListener("input", () => {
   purchaseWaiterName.value = normalizePersonName(purchaseWaiterName.value);
 });
 
+takeTicketPhotoBtn.addEventListener("click", () => {
+  purchaseTicketImage.click();
+});
+
 purchaseTicketImage.addEventListener("change", handleTicketImageChange);
 clearTicketImageBtn.addEventListener("click", clearTicketImageSelection);
+
+readTicketBtn.addEventListener("click", async () => {
+  if (!selectedTicketImageFile) {
+    setMessage(ocrStatus, "Primero toma o selecciona una foto del ticket.", "error");
+    return;
+  }
+
+  try {
+    readTicketBtn.disabled = true;
+    setMessage(ocrStatus, "Leyendo ticket, espera...", "info");
+
+    const result = await Tesseract.recognize(selectedTicketImageFile, "spa+eng");
+    const rawText = result?.data?.text || "";
+
+    const parsed = parseTicketText(rawText);
+    detectedTicketData = parsed;
+
+    ocrTicketFolio.textContent = parsed.folio || "-";
+    ocrTicketDate.textContent = parsed.ticketDate || "-";
+    ocrTicketAmount.textContent = parsed.amount != null ? formatMoney(parsed.amount) : "-";
+
+    if (parsed.folio) purchaseTicketFolio.value = parsed.folio;
+    if (parsed.ticketDate) purchaseTicketDate.value = parsed.ticketDate;
+    if (parsed.amount != null) purchaseAmount.value = parsed.amount.toFixed(2);
+
+    setMessage(ocrStatus, "Lectura completada. Revisa los datos detectados.", "success");
+  } catch (error) {
+    console.error("Error OCR:", error);
+    setMessage(ocrStatus, "No se pudo leer el ticket.", "error");
+  } finally {
+    readTicketBtn.disabled = false;
+  }
+});
 
 purchaseForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -240,6 +289,22 @@ purchaseForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const validation = validateManualVsDetected({
+    manualFolio: folio,
+    manualDate: ticketDate,
+    manualAmount: amount,
+    detected: detectedTicketData
+  });
+
+  if (!validation.ok) {
+    setMessage(
+      actionMessage,
+      validation.message || "Los datos ingresados no son iguales al ticket.",
+      "error"
+    );
+    return;
+  }
+
   const cashbackEarned = calculateCashback(amount);
   const customerFullName =
     currentCustomerData.fullName ||
@@ -256,6 +321,7 @@ purchaseForm.addEventListener("submit", async (e) => {
     waiterName,
     notes,
     cashbackEarned,
+    detectedTicketData: { ...detectedTicketData },
     ticketImageFile: selectedTicketImageFile,
     ticketImagePreview: selectedTicketImagePreview
   };
@@ -525,12 +591,23 @@ function handleTicketImageChange(event) {
 function clearTicketImageSelection() {
   selectedTicketImageFile = null;
   selectedTicketImagePreview = "";
+  detectedTicketData = {
+    folio: "",
+    ticketDate: "",
+    amount: null
+  };
+
   purchaseTicketImage.value = "";
   ticketImageName.textContent = "Ningún archivo seleccionado";
   ticketPreview.src = "";
   ticketPreview.classList.add("hidden");
   confirmTicketPreview.src = "";
   confirmTicketPreview.classList.add("hidden");
+
+  ocrTicketFolio.textContent = "-";
+  ocrTicketDate.textContent = "-";
+  ocrTicketAmount.textContent = "-";
+  setMessage(ocrStatus, "Sin lectura aún.", "info");
 }
 
 async function registerPurchase({
@@ -544,6 +621,7 @@ async function registerPurchase({
   waiterName,
   notes,
   cashbackEarned,
+  detectedTicketData,
   ticketImageUrl
 }) {
   const ticketKey = buildTicketKey(storeId, ticketDate, folio);
@@ -573,7 +651,7 @@ async function registerPurchase({
 
     transaction.update(userRef, {
       balance: newBalance,
-      points: newBalance, // compatibilidad temporal
+      points: newBalance,
       visits: newVisits,
       level: newLevel,
       updatedAt: serverTimestamp()
@@ -590,6 +668,7 @@ async function registerPurchase({
       amount,
       cashbackEarned,
       balanceEarned: cashbackEarned,
+      detectedTicketData: detectedTicketData || {},
       ticketImageUrl: ticketImageUrl || "",
       managerUid: managerUser.uid,
       managerEmail: managerUser.email,
@@ -603,7 +682,7 @@ async function registerPurchase({
       title: "Compra registrada",
       description: `Compra validada en ${storeName} con folio ${folio}.`,
       balanceChange: cashbackEarned,
-      pointsChange: cashbackEarned, // compatibilidad temporal
+      pointsChange: cashbackEarned,
       visitAdded: true,
       amount,
       ticketFolio: folio,
@@ -611,6 +690,7 @@ async function registerPurchase({
       storeId,
       storeName,
       waiterName,
+      detectedTicketData: detectedTicketData || {},
       ticketImageUrl: ticketImageUrl || "",
       createdAt: serverTimestamp(),
       managerUid: managerUser.uid,
@@ -633,10 +713,11 @@ async function registerPurchase({
       ticketFolio: folio,
       amount,
       waiterName,
+      detectedTicketData: detectedTicketData || {},
       ticketImageUrl: ticketImageUrl || "",
       cashbackEarned,
       balanceEarned: cashbackEarned,
-      pointsEarned: cashbackEarned, // compatibilidad temporal
+      pointsEarned: cashbackEarned,
       notes: notes || ""
     });
   });
@@ -695,7 +776,7 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
       title: "Visita registrada",
       description: `Visita validada en ${storeName} sin compra.`,
       balanceChange: 0,
-      pointsChange: 0, // compatibilidad temporal
+      pointsChange: 0,
       visitAdded: true,
       storeId,
       storeName,
@@ -724,7 +805,7 @@ async function registerVisit({ uid, customerName, storeId, notes }) {
       ticketImageUrl: "",
       cashbackEarned: 0,
       balanceEarned: 0,
-      pointsEarned: 0, // compatibilidad temporal
+      pointsEarned: 0,
       notes: notes || ""
     });
   });
@@ -886,6 +967,127 @@ function openConfirmModal() {
 
 function closeConfirmModal() {
   confirmModal.classList.add("hidden");
+}
+
+function parseTicketText(rawText) {
+  const text = normalizeOcrText(rawText);
+
+  const folio = extractTicketFolio(text);
+  const ticketDate = extractTicketDate(text);
+  const amount = extractTicketAmount(text);
+
+  return { folio, ticketDate, amount };
+}
+
+function normalizeOcrText(text) {
+  return String(text)
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function extractTicketFolio(text) {
+  const lines = text.split("\n").map(line => line.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    if (
+      lower.includes("folio") ||
+      lower.includes("ticket") ||
+      lower.includes("nota")
+    ) {
+      const match = line.match(/\b(\d{5})\b/);
+      if (match) return match[1];
+    }
+  }
+
+  for (const line of lines.slice(0, 12)) {
+    const match = line.match(/\b(\d{5})\b/);
+    if (match) return match[1];
+  }
+
+  return "";
+}
+
+function extractTicketDate(text) {
+  const match =
+    text.match(/\b(20\d{2})[-\/](\d{2})[-\/](\d{2})\b/) ||
+    text.match(/\b(\d{2})[-\/](\d{2})[-\/](20\d{2})\b/);
+
+  if (!match) return "";
+
+  if (match[1].length === 4) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function extractTicketAmount(text) {
+  const lines = text.split("\n").map(line => line.trim()).filter(Boolean);
+  const candidates = [];
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    if (
+      lower.includes("total") ||
+      lower.includes("importe") ||
+      lower.includes("pago")
+    ) {
+      const amounts = [...line.matchAll(/(\d+[.,]\d{2})/g)].map(m => parseAmount(m[1]));
+      candidates.push(...amounts.filter(n => !Number.isNaN(n)));
+    }
+  }
+
+  if (!candidates.length) {
+    const allAmounts = [...text.matchAll(/(\d+[.,]\d{2})/g)].map(m => parseAmount(m[1]));
+    const valid = allAmounts.filter(n => !Number.isNaN(n));
+    if (valid.length) return Math.max(...valid);
+    return null;
+  }
+
+  return Math.max(...candidates);
+}
+
+function parseAmount(value) {
+  return Number(String(value).replace(",", "."));
+}
+
+function validateManualVsDetected({ manualFolio, manualDate, manualAmount, detected }) {
+  if (!detected.folio && !detected.ticketDate && detected.amount == null) {
+    return {
+      ok: false,
+      message: "Primero debes leer el ticket para validar los datos."
+    };
+  }
+
+  if (detected.folio && manualFolio !== detected.folio) {
+    return {
+      ok: false,
+      message: "Los datos que ingresaste no son iguales al ticket: el folio no coincide."
+    };
+  }
+
+  if (detected.ticketDate && manualDate !== detected.ticketDate) {
+    return {
+      ok: false,
+      message: "Los datos que ingresaste no son iguales al ticket: la fecha no coincide."
+    };
+  }
+
+  if (detected.amount != null) {
+    const diff = Math.abs(Number(manualAmount) - Number(detected.amount));
+    if (diff > 0.01) {
+      return {
+        ok: false,
+        message: "Los datos que ingresaste no son iguales al ticket: el monto no coincide."
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 function getFileExtension(fileName) {
